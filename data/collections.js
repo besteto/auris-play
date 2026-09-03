@@ -26,7 +26,7 @@ window.Collections = [
   {
     id: 'marchesa',
     name: { ru: 'Маркеза', en: 'Marchesa' },
-    accent: '#1f3f8e',
+    accent: '#2c4470',
     hero: 'assets/plates/marchesa.jpg',
     url: 'https://aurisjewellery.com/',
     plate: {
@@ -47,7 +47,7 @@ window.Collections = [
   {
     id: 'farfalla',
     name: { ru: 'Фарфалла', en: 'Farfalla' },
-    accent: '#6a8e1f',
+    accent: '#b9705e',
     hero: 'assets/plates/farfalla.jpg',
     url: 'https://aurisjewellery.com/',
     plate: {

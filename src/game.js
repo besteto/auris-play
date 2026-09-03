@@ -8,17 +8,36 @@
 
   var CROWN_MS = 1250;       // must match the crown-* animations in style.css
 
-  var COLLECTION_LABEL = {
-    cassiopea: 'Cassiopea',
-    marchesa: 'Marchesa',
-    farfalla: 'Farfalla'
-  };
+  var lang = localStorage.getItem('auris.lang') || 'ru';
+
+  function pair(key) { return Manifest.find(Collections, key); }
+
+  /* Everything nameable comes from the manifest at runtime, which is what makes
+     adding a collection a data change rather than a code change. */
+  function labelOf(key) {
+    var p = pair(key);
+    if (!p) return '';
+    return p.collection.name[lang] + ' · ' + p.set.name[lang];
+  }
+
+  function accentOf(key) {
+    var p = pair(key);
+    return p ? p.collection.accent : '#888';
+  }
+
+  function spriteOf(piece) {
+    var p = pair(piece.key);
+    if (!p) return '';
+    return 'assets/pieces/' + p.collection.id + '_' + p.set.id + '_' + piece.tier + '.png';
+  }
 
   var state = null;
   var els = {};              // piece id -> element
   var selected = -1;         // tap-then-tap source, or -1
   var busy = false;          // ignore input while a merge animates
   var toastTimer = 0;
+  var featured = null;       // featured collection id for demo mode
+  var pendingPlate = null;   // set key of completed chain awaiting plate overlay
 
   var tray = document.getElementById('tray');
   var scoreEl = document.getElementById('score');
@@ -48,13 +67,13 @@
   function makePiece(piece) {
     var el = document.createElement('div');
     el.className = 'piece is-new';
-    el.dataset.collection = piece.collection;
+    el.dataset.collection = pair(piece.key) ? pair(piece.key).collection.id : '';
     el.dataset.id = piece.id;
+    el.style.setProperty('--accent', accentOf(piece.key));
 
     var face = document.createElement('div');
     face.className = 'piece-face';
-    face.style.backgroundImage =
-      'url("assets/pieces/' + piece.collection + '_' + piece.tier + '.png")';
+    face.style.backgroundImage = 'url("' + spriteOf(piece) + '")';
 
     var pips = document.createElement('div');
     pips.className = 'pips';
@@ -135,7 +154,7 @@
 
     var label = document.createElement('div');
     label.className = 'crown-label';
-    label.textContent = COLLECTION_LABEL[piece.collection];
+    label.textContent = labelOf(piece.key);
     tray.appendChild(label);
 
     setTimeout(function () { el.remove(); label.remove(); }, CROWN_MS);
@@ -163,37 +182,26 @@
   }
 
   /* ── HUD ───────────────────────────────────────────────────────────────── */
-  function drawEarDots() {
-    /* Seven piercing points down the helix to the lobe — one per 5 points. */
-    var pts = [[56, 13], [33, 22], [22, 45], [22, 70], [28, 94], [39, 114], [55, 127]];
-    var g = document.getElementById('ear-dots');
-    g.innerHTML = '';
-    for (var i = 0; i < pts.length; i++) {
-      var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      c.setAttribute('cx', pts[i][0]);
-      c.setAttribute('cy', pts[i][1]);
-      c.setAttribute('r', 3.6);
-      c.setAttribute('class', 'ear-dot');
-      c.dataset.slot = i;
-      g.appendChild(c);
-    }
-  }
-
   function drawHud() {
-    var filled = R.earFilled(state);
     scoreEl.textContent = state.score;
-    document.getElementById('score-target').textContent =
-      state.endless ? '' : ' / 35';
 
-    var dots = document.querySelectorAll('.ear-dot');
-    for (var i = 0; i < dots.length; i++) {
-      dots[i].classList.toggle('is-set', i < filled);
-    }
-
-    var caption = document.getElementById('ear-caption');
-    caption.textContent = state.endless
-      ? 'бесконечный режим'
-      : (filled >= R.EAR_SLOTS ? 'коллекция собрана' : 'коллекция собирается');
+    /* Pips are progress inside the sets on the tray: how many of each chain's
+       finished pieces are done before it retires. The score is the other meter,
+       and it counts total output. */
+    var pips = document.getElementById('set-pips');
+    pips.innerHTML = '';
+    state.tray.forEach(function (d) {
+      var done = state.finished[d.key] || 0;
+      var box = document.createElement('div');
+      box.className = 'set-pip';
+      box.style.setProperty('--accent', accentOf(d.key));
+      for (var i = 0; i < R.PIECES_PER_SET; i++) {
+        var dot = document.createElement('i');
+        if (i < done) dot.className = 'is-set';
+        box.appendChild(dot);
+      }
+      pips.appendChild(box);
+    });
   }
 
   function bumpScore() {
@@ -220,6 +228,10 @@
         Sfx.play('spawn');
       } else if (e.type === 'dissolve') {
         toast('убрано в сейф');
+      } else if (e.type === 'setComplete') {
+        /* Task 9 turns this into the catalogue plate overlay; for now the swap
+           itself is the visible reward. */
+        pendingPlate = e.key;
       }
     });
 
@@ -381,45 +393,55 @@
     document.getElementById(id).classList.add('is-on');
   }
 
-  function start(endless) {
-    state = R.createState((Date.now() ^ (Math.random() * 1e9)) >>> 0);
-    state.endless = endless;
+  function start(mode, featuredId) {
+    var seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    var rnd = R.mulberry32(seed);
+    var order = mode === 'demo'
+      ? Manifest.demoOrder(Collections, featuredId, rnd)
+      : Manifest.endlessOrder(Collections, rnd);
+
+    state = R.createState(seed, { sets: order, mode: mode });
+    featured = featuredId || null;
     els = {};
     busy = false;
+    pendingPlate = null;
     clearSelection();
     buildCells();
-    drawEarDots();
     sync();
     drawHud();
+    document.body.dataset.mode = mode;
     show('screen-game');
   }
 
   /* The collections page: every tier of every chain, so the pieces can be looked
-     at properly rather than glimpsed on a tray. Built from Rules so it cannot
-     drift out of step with what the game actually deals. */
+     at properly rather than glimpsed on a tray. Built from the manifest so it
+     reflects exactly what the game deals. */
   function showCollections() {
     var list = document.getElementById('collection-list');
     list.innerHTML = '';
-    R.COLLECTIONS.forEach(function (c) {
+    Collections.forEach(function (c) {
       var row = document.createElement('section');
       row.className = 'coll-row';
+      row.style.setProperty('--accent', c.accent);
 
       var name = document.createElement('h3');
       name.className = 'coll-name';
-      name.textContent = COLLECTION_LABEL[c];
+      name.textContent = c.name[lang];
       row.appendChild(name);
 
-      var strip = document.createElement('ol');
-      strip.className = 'coll-strip';
-      for (var t = 1; t <= R.MAX_TIER; t++) {
-        var li = document.createElement('li');
-        var img = document.createElement('img');
-        img.src = 'assets/pieces/' + c + '_' + t + '.png';
-        img.alt = '';
-        li.appendChild(img);
-        strip.appendChild(li);
-      }
-      row.appendChild(strip);
+      (c.sets || []).forEach(function (set) {
+        var strip = document.createElement('ol');
+        strip.className = 'coll-strip';
+        for (var t = 1; t <= (set.tiers || 3); t++) {
+          var li = document.createElement('li');
+          var img = document.createElement('img');
+          img.src = 'assets/pieces/' + c.id + '_' + set.id + '_' + t + '.png';
+          img.alt = '';
+          li.appendChild(img);
+          strip.appendChild(li);
+        }
+        row.appendChild(strip);
+      });
       list.appendChild(row);
     });
     show('screen-collections');
@@ -444,8 +466,8 @@
     Sfx.unlock();
 
     switch (btn.dataset.act) {
-      case 'play-birthday': start(false); break;
-      case 'play-endless':  start(true);  break;
+      case 'play-endless':  start('endless'); break;
+      case 'play-demo':     start('demo', btn.dataset.collection || Collections[0].id); break;
       case 'collections':   showCollections(); break;
       case 'manual':        document.getElementById('manual').hidden = false; break;
       case 'close-manual':  document.getElementById('manual').hidden = true;  break;
@@ -461,16 +483,14 @@
     if (ev.target === this) this.hidden = true;
   });
 
-  drawEarDots();
   syncMuteGlyph();
 
   /* Deep links, so any screen can be previewed without playing to it:
-     #game, #endless, #payoff, #manual, #collections */
+     #manual, #endless, #demo/*, #collections */
   (function (hash) {
     if (hash === '#manual') document.getElementById('manual').hidden = false;
-    else if (hash === '#game') start(false);
-    else if (hash === '#endless') start(true);
-    else if (hash === '#payoff') { start(false); state.score = R.TARGET; drawHud(); showPayoff(); }
+    else if (hash === '#endless') start('endless');
+    else if (hash.indexOf('#demo/') === 0) start('demo', hash.slice(6));
     else if (hash === '#collections') showCollections();
   })(location.hash);
 

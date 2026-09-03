@@ -23,8 +23,8 @@
     <p class="title-edition">Birthday&nbsp;Edition</p>
     <div class="title-rule"></div>
     <nav class="title-menu">
-      <button class="btn btn-gold" data-act="play-birthday">Играть</button>
-      <button class="btn" data-act="play-endless">Бесконечный режим</button>
+      <button class="btn btn-gold" data-act="play-endless">Играть</button>
+      <button class="btn" data-act="play-demo">Бесконечный режим</button>
       <button class="btn" data-act="collections">Коллекции</button>
       <button class="btn btn-quiet" data-act="manual">Как играть</button>
     </nav>
@@ -37,22 +37,14 @@
     <button class="icon-btn" data-act="home" aria-label="В меню">‹</button>
 
     <div class="hud-score">
-      <span id="score">0</span><span class="hud-target" id="score-target">&thinsp;/&thinsp;35</span>
+      <span id="score">0</span>
     </div>
 
     <button class="icon-btn" data-act="mute" aria-label="Звук"><span id="mute-glyph">♪</span></button>
   </header>
 
-  <!-- progress meter: the ear fills as he scores -->
-  <div class="ear-wrap" id="ear-wrap">
-    <svg class="ear" viewBox="0 0 100 140" aria-hidden="true">
-      <path class="ear-outline" d="M64 14 C40 10 22 26 21 52 C20 78 26 102 38 118
-                                    C47 130 62 132 66 121 C69 111 59 107 54 100 C50 94 51 88 57 85"/>
-      <path class="ear-inner" d="M56 36 C40 42 34 60 38 79 C41 93 48 101 53 105"/>
-      <g id="ear-dots"></g>
-    </svg>
-    <p class="ear-caption" id="ear-caption">коллекция собирается</p>
-  </div>
+  <!-- set progress pips -->
+  <div class="set-pips" id="set-pips"></div>
 
   <div class="tray-frame">
     <div class="tray" id="tray"></div>
@@ -168,6 +160,9 @@
 
 <script src="src/rules.js"></script>
 <script src="src/sfx.js"></script>
+<script src="data/collections.js"></script>
+<script src="src/manifest.js"></script>
+<script src="src/board.js"></script>
 <script src="src/game.js"></script>
 </body>
 </html>

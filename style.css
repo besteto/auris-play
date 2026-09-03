@@ -11,12 +11,6 @@
   --gold-bright:#e6c684;
   --gold-dim:   #7d6437;
 
-  /* one accent per collection — this is what makes three chains readable
-     at a glance even though the source photos have different backdrops */
-  --cassiopea:  #8e1f22;
-  --marchesa:   #2c4470;
-  --farfalla:   #b9705e;
-
   --cell:       calc(100% / 5);
   --ease:       cubic-bezier(.22, .68, .32, 1);
 
@@ -126,19 +120,12 @@ body { -webkit-user-select: none; user-select: none; touch-action: manipulation;
   40% { transform: scale(1.22); color: var(--gold-bright); }
   100% { transform: scale(1); }
 }
-.hud-target { color: var(--gold-dim); font-size: 20px; }
 
-/* ── ear meter ───────────────────────────────────────────────────────────── */
-.ear-wrap { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 2px 0 8px; }
-.ear { width: 62px; height: auto; overflow: visible; }
-.ear-outline, .ear-inner { fill: none; stroke: var(--gold-dim); stroke-width: 2.2; stroke-linecap: round; }
-.ear-inner { stroke-width: 1.6; opacity: .55; }
-.ear-dot { fill: none; stroke: var(--gold-dim); stroke-width: 1.6; opacity: .5; transition: all .5s var(--ease); }
-.ear-dot.is-set { fill: var(--gold-bright); stroke: var(--gold-bright); opacity: 1; filter: drop-shadow(0 0 5px rgba(230,198,132,.85)); }
-.ear-caption {
-  margin: 0; font-size: 10px; letter-spacing: .28em; text-transform: uppercase;
-  color: var(--gold-dim); padding-left: .28em;
-}
+/* ── set progress pips ───────────────────────────────────────────────────────── */
+.set-pips { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 2px 0 8px; }
+.set-pip { display: flex; gap: 4px; }
+.set-pip i { display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--gold-dim); opacity: .4; transition: all .5s var(--ease); }
+.set-pip i.is-set { background: var(--accent); opacity: 1; filter: drop-shadow(0 0 3px rgba(230,198,132,.6)); }
 
 /* ── tray ────────────────────────────────────────────────────────────────── */
 .tray-frame {
@@ -182,6 +169,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: manipulation;
   cursor: grab;
   transition: left .22s var(--ease), top .22s var(--ease), opacity .3s, transform .22s var(--ease);
   will-change: left, top, transform;
+  --accent: #8e1f22;
 }
 .piece-face {
   position: relative;
@@ -196,9 +184,6 @@ body { -webkit-user-select: none; user-select: none; touch-action: manipulation;
     0 4px 10px rgba(0,0,0,.55);
   transition: box-shadow .2s, transform .2s var(--ease);
 }
-.piece[data-collection="cassiopea"] { --accent: var(--cassiopea); }
-.piece[data-collection="marchesa"]  { --accent: var(--marchesa); }
-.piece[data-collection="farfalla"]  { --accent: var(--farfalla); }
 
 /* tier pips — the unambiguous size cue at phone scale */
 .pips {
@@ -488,7 +473,7 @@ body { -webkit-user-select: none; user-select: none; touch-action: manipulation;
   }
 
   /* Hold the chrome to the tray's own width so it reads as one panel. */
-  .hud, .ear-wrap, .tray-frame, .game-foot {
+  .hud, .set-pips, .tray-frame, .game-foot {
     width: min(94vw, 60vh, var(--tray-max));
     margin-inline: auto;
   }
@@ -496,17 +481,12 @@ body { -webkit-user-select: none; user-select: none; touch-action: manipulation;
 
   .hud { padding: 10px 0; }
   .hud-score { font-size: 38px; }
-  .hud-target { font-size: 25px; }
-  .ear { width: 84px; }
-  .ear-wrap { padding-bottom: 14px; }
   .game-foot { padding: 22px 0 0; }
   .toast { bottom: auto; top: 50%; }
 }
 
 /* ── short screens: give the tray the room instead of the chrome ─────────── */
 @media (max-height: 660px) {
-  .ear { width: 48px; }
-  .ear-caption { display: none; }
   .hud-score { font-size: 25px; }
   .game-foot { padding: 8px 0 10px; }
 }
