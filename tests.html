@@ -2,6 +2,8 @@
 <style>body{font:13px ui-monospace,monospace;background:#111;color:#ddd;padding:20px}
 .f{color:#ff6b6b}.p{color:#6bcf7f}h2{color:#d4af6a}</style>
 <h2>Auris Merge — rules.js</h2><pre id="out"></pre>
+<script src="data/collections.js"></script>
+<script src="src/manifest.js"></script>
 <script src="src/rules.js"></script>
 <script>
 var R = Rules, pass = 0, fail = 0, lines = [];
@@ -165,6 +167,51 @@ eq('endless mode counts every merge', en.score, 1);
 s = blank();
 for (i = 0; i < R.CELLS; i++) put(s, i, 'cassiopea', 1);
 eq('spawn is a no-op on a full tray', R.spawn(s).length, 0);
+
+/* --- manifest ------------------------------------------------------------- */
+var M = Manifest;
+var FIX = [
+  { id: 'aa', accent: '#ff0000', sets: [ { id: 's1', tiers: 3 }, { id: 's2', tiers: 4 } ] },
+  { id: 'bb', accent: '#00ff00', sets: [ { id: 's1', tiers: 3 } ] },
+  { id: 'cc', accent: '#0000ff', sets: [ { id: 's1', tiers: 3 } ] }
+];
+
+eq('sets flattens every set', M.sets(FIX).length, 4);
+eq('a descriptor key is collection/set', M.sets(FIX)[0].key, 'aa/s1');
+eq('a descriptor carries its tier cap', M.sets(FIX)[1].tiers, 4);
+eq('a descriptor defaults to three tiers',
+   M.sets([{ id: 'z', accent: '#000', sets: [{ id: 's' }] }])[0].tiers, 3);
+
+var order = M.endlessOrder(FIX, function () { return 0.5; });
+eq('endless order covers every set', order.length, 4);
+var firstThree = order.slice(0, 3).map(function (d) { return d.collection; });
+eq('the opening three are three different collections',
+   firstThree.slice().sort().join(','), 'aa,bb,cc');
+
+var demo = M.demoOrder(FIX, 'aa', function () { return 0.5; });
+eq('demo deals the featured collection first', demo[0].collection, 'aa');
+eq('demo deals every featured set before any filler', demo[1].collection, 'aa');
+ok('demo fills the third slot from elsewhere', demo[2].collection !== 'aa');
+eq('demo still offers every set', demo.length, 4);
+
+eq('hue of red is 0', Math.round(M.hue('#ff0000')), 0);
+eq('hue of green is 120', Math.round(M.hue('#00ff00')), 120);
+eq('hue of blue is 240', Math.round(M.hue('#0000ff')), 240);
+
+eq('find resolves a key to its pair', M.find(FIX, 'aa/s2').set.id, 's2');
+eq('find resolves the collection too', M.find(FIX, 'aa/s2').collection.id, 'aa');
+eq('find returns null for an unknown key', M.find(FIX, 'nope/nope'), null);
+
+/* The real manifest must satisfy the same invariants the fixtures do. */
+var real = M.sets(Collections);
+ok('the real manifest has at least three sets', real.length >= 3);
+ok('every real set declares three or four tiers',
+   real.every(function (d) { return d.tiers === 3 || d.tiers === 4; }));
+ok('every real set key is unique',
+   real.map(function (d) { return d.key; })
+       .filter(function (k, i, a) { return a.indexOf(k) !== i; }).length === 0);
+ok('every real collection has an accent and a url',
+   Collections.every(function (c) { return !!c.accent && !!c.url; }));
 
 document.getElementById('out').textContent =
   lines.join('\n') + '\n\nRESULT ' + pass + '/' + (pass + fail) +
