@@ -52,7 +52,9 @@
       all: all,
       tray: all.slice(0, TRAY_SETS),
       queue: all.slice(TRAY_SETS),
-      done: [],
+      done: [],        // set of distinct retired keys, not a retirement count.
+                       // see retire() — a retired key is never added twice, so
+                       // anything counting retirements must tally setComplete events.
       finished: {}
     };
 
@@ -306,6 +308,10 @@
     return state.opening.every(function (k) { return state.done.indexOf(k) >= 0; });
   }
 
+  /* Test seam to sweep PIECES_PER_SET in tuning.html without touching the module
+     closure. Writing to the export object does not change the closure variable. */
+  function setPiecesPerSet(n) { PIECES_PER_SET = n; }
+
   root.Rules = {
     GRID: GRID, CELLS: CELLS, TRAY_SETS: TRAY_SETS,
     SCORING: SCORING, PIECES_PER_SET: PIECES_PER_SET,
@@ -315,6 +321,7 @@
     spawn: spawn, setsWantingPartner: setsWantingPartner,
     canMerge: canMerge, classify: classify, apply: apply, isCell: isCell,
     hasLegalMove: hasLegalMove, relieve: relieve, retire: retire,
-    isComplete: isComplete
+    isComplete: isComplete,
+    _setPiecesPerSet: setPiecesPerSet
   };
 })(typeof window !== 'undefined' ? window : globalThis);
