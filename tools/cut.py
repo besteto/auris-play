@@ -22,22 +22,22 @@ OUT = "assets"
 TOKEN = 256  # output px; 2x the ~128px display size, for retina
 
 CROPS = {
-    # CASSIOPEA -- rings on red/black. Source is 1667x2500.
-    "cassiopea_1": ("AES2711.jpg", 1100, 790, 430),
-    "cassiopea_2": ("AES2711.jpg", 800, 1165, 430),
-    "cassiopea_3": ("AES2711.jpg", 465, 1550, 430),
+    # CASSIOPEA rings -- rings on red/black. Source is 1667x2500.
+    "cassiopea_rings_1": ("AES2711.jpg", 1100, 790, 430),
+    "cassiopea_rings_2": ("AES2711.jpg", 800, 1165, 430),
+    "cassiopea_rings_3": ("AES2711.jpg", 465, 1550, 430),
 
-    # FARFALLA -- butterflies on skin. Source is 1333x2000.
+    # FARFALLA butterflies -- butterflies on skin. Source is 1333x2000.
     # Ordered mono -> pastel -> jewel so the tiers read apart at phone size.
-    "farfalla_1": ("dsc07958.jpg", 855, 965, 215),
-    "farfalla_2": ("dsc07958.jpg", 722, 1232, 225),
-    "farfalla_3": ("dsc07958.jpg", 878, 800, 245),
+    "farfalla_butterflies_1": ("dsc07958.jpg", 855, 965, 215),
+    "farfalla_butterflies_2": ("dsc07958.jpg", 722, 1232, 225),
+    "farfalla_butterflies_3": ("dsc07958.jpg", 878, 800, 245),
 
-    # MARCHESA -- sapphire. Source is only 469x444, so these are the soft ones;
+    # MARCHESA sapphire -- sapphire. Source is only 469x444, so these are the soft ones;
     # first candidates for replacement when better photography lands.
-    "marchesa_1": ("Screenshot 2026-08-25 071125.png", 175, 275, 95),
-    "marchesa_2": ("Screenshot 2026-08-25 071125.png", 325, 185, 95),
-    "marchesa_3": ("Screenshot 2026-08-25 071125.png", 127, 88, 185),
+    "marchesa_sapphire_1": ("Screenshot 2026-08-25 071125.png", 175, 275, 95),
+    "marchesa_sapphire_2": ("Screenshot 2026-08-25 071125.png", 325, 185, 95),
+    "marchesa_sapphire_3": ("Screenshot 2026-08-25 071125.png", 127, 88, 185),
 }
 
 # Square crop of the portrait as (centre_x, centre_y, size) in source pixels.
