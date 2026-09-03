@@ -40,6 +40,33 @@ CROPS = {
     "marchesa_sapphire_3": ("Screenshot 2026-08-25 071125.png", 127, 88, 185),
 }
 
+# Catalogue plates: one per set. 4:5 portrait, cut from the same shoots as the
+# sprites -- nothing is shot for launch.
+#
+# cassiopea_rings  -- all three rings at once, along the diagonal they sit on
+#                     in the source, from the plain band down to the crown.
+# farfalla_butterflies -- the whole ear, so both the helix cluster and the row
+#                     along the lobe are in frame.
+# marchesa_sapphire -- the source is only 469x444, so this is nearly the full
+#                     frame and is the soft one; first to be replaced when
+#                     better photography lands.
+PLATES = {
+    "cassiopea_rings":      ("AES2711.jpg", 780, 1150, 1100),
+    "farfalla_butterflies": ("dsc07958.jpg", 700, 950, 1000),
+    "marchesa_sapphire":    ("Screenshot 2026-08-25 071125.png", 234, 222, 355),
+}
+
+# Collection heroes: the demo ending. Framed wider than the set plate so the
+# two read as different photographs rather than two crops of one.
+HEROES = {
+    "cassiopea": ("AES2711.jpg", 833, 1250, 1450),
+    # A different shoot from the plate's, so the hero and the set plate read as
+    # two photographs rather than two crops of one -- more of the head, and the
+    # blue and teal pieces rather than the plate's mixed row.
+    "farfalla":  ("dsc08036.jpg", 740, 900, 1100),
+    "marchesa":  ("Screenshot 2026-08-25 071125.png", 234, 222, 355),
+}
+
 # Square crop of the portrait as (centre_x, centre_y, size) in source pixels.
 # Framed on the face and cut just below the bow tie, wide enough to keep the ear
 # stretchers -- he is a piercer, so those are the point.
@@ -67,6 +94,20 @@ def crop_square(src_name, cx, cy, size):
     return im.crop((x0, y0, x0 + size, y0 + size)).resize((TOKEN, TOKEN), Image.LANCZOS)
 
 
+def crop_portrait(src_name, cx, cy, width):
+    """Crop a 4:5 portrait box centred on (cx, cy), in SOURCE pixels.
+
+    Plates are portrait because both usable sources are 2:3 and jewellery worn
+    on the body reads as a portrait image. Sprites stay square via crop_square;
+    the two are not interchangeable.
+    """
+    height = int(width * 1.25)
+    im = Image.open(os.path.join(SRC, src_name)).convert("RGB")
+    x0 = max(0, min(cx - width // 2, im.width - width))
+    y0 = max(0, min(cy - height // 2, im.height - height))
+    return im.crop((x0, y0, x0 + width, y0 + height))
+
+
 def circular(im):
     """Mask to a circle, supersampled so the edge is not aliased.
 
@@ -90,6 +131,23 @@ def build_pieces():
         tokens[name] = tok
     print("pieces:  %d tokens" % len(tokens))
     return tokens
+
+
+def build_plates():
+    """Catalogue plates: set plates and collection heroes.
+
+    Plates are 4:5 portrait photographs, cut from the same shoots as the
+    sprites. They show one piece (set plate) or the collection as a whole
+    (hero), and are displayed at full cropped resolution because they are
+    shown large. Generated as JPEG at quality 88 — these are photographs,
+    not masked tokens, so JPEG is correct and there is no alpha channel.
+    """
+    dest = os.path.join(OUT, "plates")
+    os.makedirs(dest, exist_ok=True)
+    for name, (src, cx, cy, width) in list(PLATES.items()) + list(HEROES.items()):
+        im = crop_portrait(src, cx, cy, width)
+        im.save(os.path.join(dest, name + ".jpg"), quality=88)
+        print("  plates/%s.jpg %dx%d" % (name, im.width, im.height))
 
 
 def build_portrait():
@@ -183,6 +241,7 @@ def contact_sheet(tokens):
 
 def main():
     tokens = build_pieces()
+    build_plates()
     build_backgrounds()
     build_portrait()
     build_studio()
