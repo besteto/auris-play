@@ -137,6 +137,18 @@ eq('a tier-3 emits a score event', evs(e, 'score').length, 1);
 eq('the score event carries the crown', evs(e, 'score')[0].piece.tier, 3);
 ok('no tier-3 is left on the tray', s.cells.every(function (c) { return !c || c.tier < 3; }));
 
+/* --- a four-tier set does not finish early --------------------------------
+   The merged piece's cap must come from the merging piece (top: a.top), not a
+   hardcoded 3. Every other merge assertion here uses a three-tier set, where
+   top defaults to 3 anyway, so this is the only test that would catch a
+   regression back to a literal 3. */
+s = blank();
+put(s, 0, 'dd/s', 2, 4); put(s, 1, 'dd/s', 2, 4);
+e = R.apply(s, 0, 1);
+eq('a four-tier merge keeps its cap', s.cells[1].top, 4);
+eq('a four-tier set reaches tier 3 without finishing', s.cells[1].tier, 3);
+eq('a tier-3 piece of a four-tier set does not score out', evs(e, 'score').length, 0);
+
 /* --- a full chain: three merges, one finished piece ----------------------- */
 s = blank();
 put(s, 0, 'cc/s', 1); put(s, 1, 'cc/s', 1);
@@ -147,6 +159,64 @@ R.apply(s, 1, 3);
 eq('a full chain is three merges and three points', s.score, 3);
 eq('a finished piece brings a bonus tier-1 with it',
    evs(R.apply(blankPair('bb/s', 2), 0, 1), 'spawn').length, 2);
+
+/* --- finishing a set ------------------------------------------------------ */
+function finishOne(s, key, top) {
+  /* One finished piece: put two top-1 pieces down and merge them. */
+  var t = (top || 3) - 1;
+  put(s, 0, key, t, top || 3); put(s, 1, key, t, top || 3);
+  return R.apply(s, 0, 1);
+}
+
+s = blank();
+var ev = finishOne(s, 'aa/s');
+eq('a finished piece is counted against its set', s.finished['aa/s'], 1);
+eq('one finished piece does not retire the set', s.done.length, 0);
+eq('no setComplete event yet', evs(ev, 'setComplete').length, 0);
+
+s = blank();
+s.finished['aa/s'] = R.PIECES_PER_SET - 1;
+ev = finishOne(s, 'aa/s');
+eq('the threshold retires the set', s.done[0], 'aa/s');
+eq('a retirement emits setComplete', evs(ev, 'setComplete').length, 1);
+eq('setComplete names the set', evs(ev, 'setComplete')[0].key, 'aa/s');
+eq('the tray is still three sets after a retirement', s.tray.length, 3);
+ok('the retired set is off the tray',
+   !s.tray.some(function (d) { return d.key === 'aa/s'; }));
+ok('the incoming set came from the queue',
+   s.tray.some(function (d) { return d.key === 'dd/s'; }));
+
+/* --- retirement clears the retired chain off the tray --------------------- */
+s = blank();
+put(s, 5, 'aa/s', 1); put(s, 6, 'aa/s', 2); put(s, 7, 'bb/s', 1);
+ev = R.retire(s, 'aa/s');
+ok('no piece of a retired set survives on the tray',
+   s.cells.every(function (p) { return !p || p.key !== 'aa/s'; }));
+ok('other sets are untouched', s.cells[7] && s.cells[7].key === 'bb/s');
+eq('retirement dissolves what it removed', evs(ev, 'dissolve').length, 2);
+ok('the incoming set seeds the freed cells', evs(ev, 'spawn').length >= 1);
+ok('the seeded pieces belong to the incoming set',
+   evs(ev, 'spawn').every(function (x) {
+     return s.tray.some(function (d) { return d.key === x.piece.key; });
+   }));
+eq('setComplete comes before the dissolves', ev[0].type, 'setComplete');
+
+/* --- endless never runs dry ----------------------------------------------- */
+s = R.createState(5, { sets: fixture(), mode: 'endless' });
+s.queue = [];
+var trayBefore = s.tray.map(function (d) { return d.key; });
+R.retire(s, trayBefore[0]);
+eq('endless refills the queue rather than shrinking the tray', s.tray.length, 3);
+ok('the refill never re-deals a set already on the tray',
+   s.tray.map(function (d) { return d.key; })
+     .filter(function (k, i, a) { return a.indexOf(k) !== i; }).length === 0);
+
+/* --- demo stops rather than recycling -------------------------------------- */
+s = R.createState(5, { sets: fixture(), mode: 'demo' });
+s.queue = [];
+var demoTray = s.tray.map(function (d) { return d.key; });
+R.retire(s, demoTray[0]);
+eq('demo lets the tray shrink when the queue is empty', s.tray.length, 2);
 
 /* --- illegal moves are inert --------------------------------------------- */
 s = blank(); put(s, 0, 'aa/s', 1); put(s, 2, 'bb/s', 1);

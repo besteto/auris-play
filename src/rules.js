@@ -189,6 +189,7 @@
     if (merged.tier === merged.top) {
       state.cells[to] = null;
       events.push({ type: 'score', index: to, piece: merged, points: gained });
+      state.finished[merged.key] = (state.finished[merged.key] || 0) + 1;
     }
 
     events = events.concat(spawn(state));
@@ -197,6 +198,13 @@
        tier-1 arrives with each crown. That keeps the tray stocked at a steady
        level without the player having to keep tapping the pouch. */
     if (merged.tier === merged.top) events = events.concat(spawn(state));
+
+    /* Retire last, so the dissolve and seed events land after the refill and the
+       renderer plays them in the order they read. */
+    if (merged.tier === merged.top &&
+        state.finished[merged.key] >= PIECES_PER_SET) {
+      events = events.concat(retire(state, merged.key));
+    }
 
     return events;
   }
@@ -209,6 +217,49 @@
       }
     }
     return false;
+  }
+
+  /* A set leaves the tray when PIECES_PER_SET of it have been finished. Its
+     leftovers go into the case with it rather than sitting on the tray as pieces
+     nobody can merge any more, and the incoming set seeds the cells they leave.
+     That is what makes the swap read as a reward instead of as bookkeeping. */
+  function retire(state, key) {
+    var slot = -1;
+    for (var i = 0; i < state.tray.length; i++) {
+      if (state.tray[i].key === key) { slot = i; break; }
+    }
+    if (slot < 0) return [];
+
+    var events = [{ type: 'setComplete', key: key, index: slot }];
+    state.tray.splice(slot, 1);
+    if (state.done.indexOf(key) < 0) state.done.push(key);
+
+    var freed = [];
+    for (var c = 0; c < CELLS; c++) {
+      var p = state.cells[c];
+      if (!p || p.key !== key) continue;
+      state.cells[c] = null;
+      freed.push(c);
+      events.push({ type: 'dissolve', index: c, piece: p, reason: 'retire' });
+    }
+
+    /* Endless means endless: when the queue runs out, everything not currently
+       on the tray goes back into it. Demo deliberately does not recycle — it is
+       supposed to end. */
+    if (!state.queue.length && state.mode === 'endless') {
+      var onTray = state.tray.map(function (d) { return d.key; });
+      state.queue = state.all.filter(function (d) { return onTray.indexOf(d.key) < 0; });
+    }
+
+    var incoming = state.queue.shift();
+    if (incoming) {
+      state.tray.splice(slot, 0, incoming);
+      state.finished[incoming.key] = 0;
+      for (var f = 0; f < freed.length; f++) {
+        events = events.concat(spawn(state, freed[f], incoming.key));
+      }
+    }
+    return events;
   }
 
   /* Birthday mode must not be losable. When the tray jams, the oldest tier-1
@@ -242,7 +293,7 @@
     createState: createState, emptyCells: emptyCells,
     spawn: spawn, setsWantingPartner: setsWantingPartner,
     canMerge: canMerge, classify: classify, apply: apply, isCell: isCell,
-    hasLegalMove: hasLegalMove, relieve: relieve,
+    hasLegalMove: hasLegalMove, relieve: relieve, retire: retire,
     isComplete: isComplete
   };
 })(typeof window !== 'undefined' ? window : globalThis);
