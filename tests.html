@@ -145,9 +145,9 @@ ok('no tier-3 is left on the tray', s.cells.every(function (c) { return !c || c.
 s = blank();
 put(s, 0, 'dd/s', 2, 4); put(s, 1, 'dd/s', 2, 4);
 e = R.apply(s, 0, 1);
+eq('a tier-3 piece of a four-tier set does not score out', evs(e, 'score').length, 0);
 eq('a four-tier merge keeps its cap', s.cells[1].top, 4);
 eq('a four-tier set reaches tier 3 without finishing', s.cells[1].tier, 3);
-eq('a tier-3 piece of a four-tier set does not score out', evs(e, 'score').length, 0);
 
 /* --- a full chain: three merges, one finished piece ----------------------- */
 s = blank();
@@ -176,6 +176,7 @@ eq('no setComplete event yet', evs(ev, 'setComplete').length, 0);
 
 s = blank();
 s.finished['aa/s'] = R.PIECES_PER_SET - 1;
+put(s, 10, 'aa/s', 1);  // a straggler retirement must sweep off the tray too
 ev = finishOne(s, 'aa/s');
 eq('the threshold retires the set', s.done[0], 'aa/s');
 eq('a retirement emits setComplete', evs(ev, 'setComplete').length, 1);
@@ -185,6 +186,13 @@ ok('the retired set is off the tray',
    !s.tray.some(function (d) { return d.key === 'aa/s'; }));
 ok('the incoming set came from the queue',
    s.tray.some(function (d) { return d.key === 'dd/s'; }));
+eq('the incoming set starts uncounted', s.finished['dd/s'], 0);
+
+var types = ev.map(function (x) { return x.type; });
+ok('the refill spawns land before the retirement',
+   types.indexOf('spawn') < types.indexOf('setComplete'));
+ok('setComplete precedes the dissolves',
+   types.indexOf('setComplete') < types.indexOf('dissolve'));
 
 /* --- retirement clears the retired chain off the tray --------------------- */
 s = blank();
@@ -238,7 +246,7 @@ var jam = blank();
 for (i = 0; i < R.CELLS; i++) put(jam, i, 'aa/s', 3);
 ok('a tray of un-mergeable crowns is jammed', !R.hasLegalMove(jam));
 
-/* --- relieve: birthday mode cannot be lost -------------------------------- */
+/* --- relieve: the tray can never dead-end ---------------------------------- */
 s = blank();
 var first = put(s, 3, 'aa/s', 1);
 put(s, 4, 'bb/s', 1); put(s, 5, 'cc/s', 1);
@@ -249,6 +257,70 @@ eq('relieve frees exactly one cell', R.emptyCells(s).length, R.CELLS - 2);
 
 s = blank(); put(s, 0, 'aa/s', 2);
 eq('relieve never touches a tier-2', R.relieve(s).length, 0);
+
+/* The case that only exists now that sets retire mid-game: a tray full of
+   pieces belonging to sets that have LEFT. Nothing can merge, nothing spawns
+   into them, and endless has no end state to fall through to. */
+/* Each cell gets a DIFFERENT gone key: identical keys would just merge each
+   other, same as any live pair, and prove nothing about stranding. */
+var stranded = blank();
+for (i = 0; i < R.CELLS; i++) put(stranded, i, 'zz/gone' + i, 1);
+ok('a tray of stranded tier-1s is jammed', !R.hasLegalMove(stranded));
+ok('relieve still frees a cell there', R.relieve(stranded).length === 1);
+ok('a legal move exists once relieve has run', R.hasLegalMove(stranded));
+
+/* This -- not the loop below -- is the actual reason the tray cannot dead-end
+   in normal play. spawn() only ever draws a key from state.tray (three keys,
+   TRAY_SETS) and only ever produces a tier-1 piece, so a board filled by
+   spawning alone can hold at most three distinct (key, tier) classes.
+   Twenty-five pieces sorted into three classes cannot avoid some class
+   holding two or more (pigeonhole), and any two pieces in the same class are
+   a mergeable pair by definition -- canMerge only checks key, tier and
+   tier < top, and every fixture descriptor here has top >= 3 at tier 1. So a
+   full board with no legal move is unreachable through spawn alone; building
+   one at all takes a hand-constructed state, like the stranded tray above. */
+var full = blank();
+while (R.emptyCells(full).length) R.spawn(full);
+var classes = {};
+for (i = 0; i < R.CELLS; i++) {
+  var fp = full.cells[i];
+  classes[fp.key + '/' + fp.tier] = true;
+}
+eq('spawning alone fills the board', R.emptyCells(full).length, 0);
+ok('a board filled by spawn alone holds at most three (key, tier) classes',
+   Object.keys(classes).length <= 3);
+ok('a full board built by spawn alone still has a legal move', R.hasLegalMove(full));
+
+/* Sustained play: 2000 turns of greedy merge-or-refill. Occupancy here is
+   conserved at exactly START_PIECES all game -- every merge frees a cell a
+   spawn immediately refills, every retirement reseeds exactly the cells it
+   dissolved -- so the tray is never full and the jam branch below never
+   actually fires in this drive pattern; that is not this loop's proof (the
+   pigeonhole assertion above is that proof). What this loop legitimately
+   demonstrates: sustained play never trips the guard, retirements keep
+   happening under real churn, and the tray is rebuilt to exactly three sets
+   every time one retires -- that last one would catch broken queue
+   recycling. */
+var loop = R.createState(11, { sets: fixture(), mode: 'endless' });
+var guard = 0, stuck = false, retireCount = 0;
+while (guard++ < 2000) {
+  if (!R.hasLegalMove(loop)) {
+    if (!R.relieve(loop).length && !R.emptyCells(loop).length) { stuck = true; break; }
+  }
+  var moves = [];
+  for (i = 0; i < R.CELLS; i++) {
+    for (var j = 0; j < R.CELLS; j++) {
+      if (i !== j && R.classify(loop, i, j) === 'merge') moves.push([i, j]);
+    }
+  }
+  if (moves.length) {
+    retireCount += evs(R.apply(loop, moves[0][0], moves[0][1]), 'setComplete').length;
+  }
+  else if (R.emptyCells(loop).length) R.spawn(loop);
+}
+ok('2000 turns of sustained play never trip the relieve/no-move-empty guard', !stuck);
+ok('the tray is rebuilt to three sets through many retirements', loop.tray.length === 3);
+ok('retirements actually happened during the sustained-play drive', retireCount > 0);
 
 /* --- scoring: flat, every merge counts ------------------------------------ */
 s = blank(); put(s, 0, 'aa/s', 1); put(s, 1, 'aa/s', 1);
@@ -280,6 +352,11 @@ ok('demo does not complete on two of three', !R.isComplete(d2));
 s = blank();
 for (i = 0; i < R.CELLS; i++) put(s, i, 'aa/s', 1);
 eq('spawn is a no-op on a full tray', R.spawn(s).length, 0);
+
+/* Demo's last set can retire with nothing left to replace it, leaving the
+   tray empty -- newly reachable now that sets retire mid-game. */
+s = blank(); s.tray = [];
+eq('spawn is a no-op on an empty tray', R.spawn(s).length, 0);
 
 /* --- manifest ------------------------------------------------------------- */
 var M = Manifest;

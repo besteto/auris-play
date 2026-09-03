@@ -106,6 +106,12 @@
   function spawn(state, forceIndex, forceKey) {
     var free = emptyCells(state);
     if (!free.length) return [];
+    /* Demo's last set can retire with nothing left to replace it, leaving the
+       tray empty. Without this guard, pool is [] and
+       pool[Math.floor(rng() * 0)] is undefined -- pieces spawn with
+       key: undefined, and two of them satisfy canMerge, since
+       undefined === undefined. */
+    if (!state.tray.length) return [];
 
     var idx = forceIndex !== undefined ? forceIndex
             : free[Math.floor(state.rng() * free.length)];
@@ -262,8 +268,23 @@
     return events;
   }
 
-  /* Birthday mode must not be losable. When the tray jams, the oldest tier-1
-     quietly dissolves rather than ending his own birthday. */
+  /* Unconditional. When the tray jams, the oldest tier-1 quietly dissolves.
+
+     What it actually guards against: a full tray (CELLS/CELLS) with no
+     mergeable pair anywhere on it. It is NOT guarding against pieces of a
+     retired set stranded on the board -- retire() sweeps every cell holding
+     its key the moment a set leaves, and spawn() only ever draws keys from
+     state.tray, so a stranded piece of that shape cannot exist here.
+
+     Under the current tuning that full-and-unmergeable state is actually
+     unreachable in play: spawn only ever produces tier-1 pieces from the
+     three tray keys, so a board filled by spawning alone holds at most three
+     (key, tier) classes, and twenty-five pieces in three classes always
+     pigeonhole a mergeable pair (see tests.html, the "board filled by spawn
+     alone" assertions). So this is a backstop, not a mechanic -- it earns
+     its keep only if TRAY_SETS, START_PIECES or spawn's key pool ever
+     changes, and the pigeonhole assertion is what would start failing first
+     if it did. */
   function relieve(state) {
     var oldest = -1;
     for (var i = 0; i < CELLS; i++) {

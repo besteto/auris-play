@@ -233,13 +233,12 @@
       return;
     }
 
-    /* Birthday mode must not be losable: unjam the tray instead of ending. */
+    /* The tray must never dead-end in front of a client in the chair. Endless
+       has no end state to fall through to, so this is not a courtesy any more --
+       it is the only thing standing between a jam and a board that can only be
+       left by the idle timer. */
     if (!R.hasLegalMove(state)) {
-      if (state.endless) {
-        toast('поднос полон');
-      } else {
-        setTimeout(function () { runEvents(R.relieve(state)); }, 420);
-      }
+      setTimeout(function () { runEvents(R.relieve(state)); }, 420);
     }
   }
 
