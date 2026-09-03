@@ -47,15 +47,41 @@ for page in "${PAGES[@]}"; do
   echo "=== $page.html ==="
   python -c "
 import html, re, sys
+# The harness pages are UTF-8 and print em dashes; Windows consoles default to
+# cp1252, which raises rather than mangling. Reconfigure before printing anything.
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
 raw = open(r'$dump', encoding='utf-8', errors='replace').read()
 hit = re.search(r'<pre id=\"out\">(.*?)</pre>', raw, re.S)
 if not hit:
-    print('NO OUTPUT BLOCK -- the page threw before rendering. Check for a syntax error.')
+    print('NO OUTPUT BLOCK -- the page never rendered at all.')
     sys.exit(1)
 text = html.unescape(hit.group(1))
-for line in text.split(chr(10)):
-    if 'FAIL' in line or 'RESULT' in line or line.strip().startswith(('taps', 'at ', 'pouch', 'unjams', 'median')):
-        print(line)
+
+# The <pre> exists in the markup, so it is present-and-empty when the script
+# throws partway through. Only the closing RESULT line proves the suite ran to
+# the end -- without this check a page that dies on its first assertion exits 0
+# and the gate reports a pass it never saw.
+if 'RESULT' not in text:
+    print('NO RESULT LINE -- the page threw before finishing. Open it in a browser')
+    print('and read the console; the harness cannot tell you which line died.')
+    if text.strip():
+        print('--- partial output ---')
+        print(text.strip()[-500:])
+    sys.exit(1)
+
+# tests.html prints one line per assertion — over a hundred of them — so only the
+# failures and the tally are worth showing. Every other page is a measurement
+# summary whose whole output IS the result, and filtering it hid the tuning table
+# from the person who needed to read it.
+if '$page' == 'tests':
+    for line in text.split(chr(10)):
+        if 'FAIL' in line or 'RESULT' in line:
+            print(line)
+else:
+    print(text.strip())
 sys.exit(1 if 'FAIL' in text else 0)
 " || STATUS=1
 done
