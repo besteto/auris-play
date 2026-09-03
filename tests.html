@@ -5,6 +5,7 @@
 <script src="data/collections.js"></script>
 <script src="src/manifest.js"></script>
 <script src="src/rules.js"></script>
+<script src="src/board.js"></script>
 <script>
 var R = Rules, pass = 0, fail = 0, lines = [];
 function ok(name, cond, extra) {
@@ -402,6 +403,83 @@ ok('every real set key is unique',
        .filter(function (k, i, a) { return a.indexOf(k) !== i; }).length === 0);
 ok('every real collection has an accent and a url',
    Collections.every(function (c) { return !!c.accent && !!c.url; }));
+
+/* --- leaderboard ---------------------------------------------------------- */
+function fakeStore() {
+  var mem = {};
+  return {
+    getItem: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+    setItem: function (k, v) { mem[k] = String(v); },
+    _mem: mem
+  };
+}
+var store = fakeStore(), day = '2026-09-03';
+Board.attach(store, function () { return day; });
+
+eq('a fresh board is empty', Board.rows().length, 0);
+ok('any score qualifies for an empty board', Board.qualifies(1));
+
+Board.add('АБВ', 40);
+eq('a score lands on the board', Board.rows().length, 1);
+eq('the board keeps the initials', Board.rows()[0].initials, 'АБВ');
+
+Board.add('ГДЕ', 90);
+eq('the board sorts by score, highest first', Board.rows()[0].score, 90);
+
+for (var b = 0; b < 12; b++) Board.add('X' + b, 100 + b);
+eq('the board holds ten rows at most', Board.rows().length, 10);
+eq('the top row is the highest score', Board.rows()[0].score, 111);
+ok('a score below the tenth does not qualify', !Board.qualifies(1));
+
+eq('initials are cut to three characters', Board.add('ABCDEF', 500)[0].initials, 'ABC');
+eq('initials are upper-cased', Board.add('xyz', 600)[0].initials, 'XYZ');
+
+day = '2026-09-04';
+eq('the board resets when the date changes', Board.rows().length, 0);
+ok('any score qualifies again the next day', Board.qualifies(1));
+
+/* --- malformed stored shapes (Finding 2 safety) ----------------------------- */
+/* Pre-seed store with today's date but malformed rows shapes. */
+var testCases = [
+  { rows: {} },
+  { rows: 'not an array' },
+  { rows: 123 },
+  { rows: null },
+  { rows: true }
+];
+testCases.forEach(function (shape, i) {
+  var store3 = fakeStore();
+  var day3 = '2026-09-06';
+  store3.setItem('auris.board.v1', JSON.stringify({ date: day3, rows: shape.rows }));
+  Board.attach(store3, function () { return day3; });
+  eq('rows() handles malformed rows #' + i, Board.rows().length, 0);
+  ok('add() does not throw on malformed rows #' + i, function() {
+    try { Board.add('XYZ', 100); return true; } catch (e) { return false; }
+  }());
+});
+
+/* Non-JSON stored values are caught by JSON.parse and return empty board. */
+var store4 = fakeStore(), day4 = '2026-09-07';
+store4._mem['auris.board.v1'] = 'not valid json at all';
+Board.attach(store4, function () { return day4; });
+eq('rows() handles non-JSON stored value', Board.rows().length, 0);
+
+/* Bare JSON values (whole stored value is not an object) must degrade safely. */
+var store5 = fakeStore(), day5 = '2026-09-08';
+store5._mem['auris.board.v1'] = 'null';
+Board.attach(store5, function () { return day5; });
+eq('rows() handles stored bare null', Board.rows().length, 0);
+ok('add() does not throw on stored bare null', function() {
+  try { Board.add('АБВ', 50); return true; } catch (e) { return false; }
+}());
+
+var store6 = fakeStore(), day6 = '2026-09-09';
+store6._mem['auris.board.v1'] = '42';
+Board.attach(store6, function () { return day6; });
+eq('rows() handles stored bare number', Board.rows().length, 0);
+ok('add() does not throw on stored bare number', function() {
+  try { Board.add('ХУЙ', 75); return true; } catch (e) { return false; }
+}());
 
 document.getElementById('out').textContent =
   lines.join('\n') + '\n\nRESULT ' + pass + '/' + (pass + fail) +
