@@ -125,16 +125,14 @@ s = blank(); put(s, 0, 'aa/s', 1); put(s, 1, 'aa/s', 1);
 e = R.apply(s, 0, 1);
 eq('two tier-1s make a tier-2', s.cells[1].tier, 2);
 eq('the tier-2 keeps the set key', s.cells[1].key, 'aa/s');
-eq('an intermediate merge is only a step, not a score', s.score, 0);
+eq('a merge to tier 2 scores one, same as any merge', s.score, 1);
 eq('a merge emits a merge event', evs(e, 'merge').length, 1);
 eq('a merge refills the tray', evs(e, 'spawn').length, 1);
 
 /* --- merge to tier 3: scores and dissolves -------------------------------- */
 s = blank(); put(s, 0, 'bb/s', 2); put(s, 1, 'bb/s', 2);
 e = R.apply(s, 0, 1);
-eq('a finished piece scores five', s.score, 5);
-eq('a finished piece fills exactly one piercing', R.TARGET / R.EAR_SLOTS, 5);
-eq('seven finished pieces reach the target', 7 * R.SCORING.birthday[3], R.TARGET);
+eq('a finished piece scores one', s.score, 1);
 eq('a tier-3 emits a score event', evs(e, 'score').length, 1);
 eq('the score event carries the crown', evs(e, 'score')[0].piece.tier, 3);
 ok('no tier-3 is left on the tray', s.cells.every(function (c) { return !c || c.tier < 3; }));
@@ -146,8 +144,7 @@ put(s, 2, 'cc/s', 1); put(s, 3, 'cc/s', 1);
 R.apply(s, 0, 1);
 R.apply(s, 2, 3);
 R.apply(s, 1, 3);
-eq('a full chain is three merges and five points', s.score, 5);
-eq('the target is one point per year', R.TARGET, 35);
+eq('a full chain is three merges and three points', s.score, 3);
 eq('a finished piece brings a bonus tier-1 with it',
    evs(R.apply(blankPair('bb/s', 2), 0, 1), 'spawn').length, 2);
 
@@ -183,27 +180,31 @@ eq('relieve frees exactly one cell', R.emptyCells(s).length, R.CELLS - 2);
 s = blank(); put(s, 0, 'aa/s', 2);
 eq('relieve never touches a tier-2', R.relieve(s).length, 0);
 
-/* --- ear meter ------------------------------------------------------------ */
-s = blank();
-eq('the ear starts empty', R.earFilled(s), 0);
-s.score = 5;  eq('5 points fills one piercing', R.earFilled(s), 1);
-s.score = 34; eq('34 points leaves the last one empty', R.earFilled(s), 6);
-s.score = 35; eq('35 points fills the ear', R.earFilled(s), R.EAR_SLOTS);
-s.score = 99; eq('the ear cannot overfill', R.earFilled(s), R.EAR_SLOTS);
+/* --- scoring: flat, every merge counts ------------------------------------ */
+s = blank(); put(s, 0, 'aa/s', 1); put(s, 1, 'aa/s', 1);
+R.apply(s, 0, 1);
+eq('an intermediate merge scores one', s.score, 1);
 
-/* --- completion ----------------------------------------------------------- */
-s = blank(); s.score = 34; ok('34 points is not the birthday yet', !R.isComplete(s));
-s.score = 35; ok('35 points IS the birthday', R.isComplete(s));
-s.endless = true; ok('endless mode never completes', !R.isComplete(s));
+s = blank(); put(s, 0, 'aa/s', 2); put(s, 1, 'aa/s', 2);
+R.apply(s, 0, 1);
+eq('a finished piece also scores one', s.score, 1);
+eq('there is no target to land on', R.TARGET, undefined);
+eq('the ear meter is gone', R.earFilled, undefined);
 
-/* --- endless scores differently ------------------------------------------- */
-var bd = blank(); put(bd, 0, 'aa/s', 1); put(bd, 1, 'aa/s', 1);
-R.apply(bd, 0, 1);
-eq('birthday mode ignores an intermediate merge', bd.score, 0);
+/* --- completion ------------------------------------------------------------ */
+var e1 = R.createState(1, { sets: fixture(), mode: 'endless' });
+e1.score = 9999;
+ok('endless never completes, whatever the score', !R.isComplete(e1));
 
-var en = blank(); en.endless = true; put(en, 0, 'aa/s', 1); put(en, 1, 'aa/s', 1);
-R.apply(en, 0, 1);
-eq('endless mode counts every merge', en.score, 1);
+var d1 = R.createState(1, { sets: fixture(), mode: 'demo' });
+ok('demo does not complete while sets remain', !R.isComplete(d1));
+eq('demo remembers the three it opened with', d1.opening.length, 3);
+d1.done = d1.opening.slice();
+ok('demo completes when its opening three are done', R.isComplete(d1));
+
+var d2 = R.createState(1, { sets: fixture(), mode: 'demo' });
+d2.done = [d2.opening[0], d2.opening[1]];
+ok('demo does not complete on two of three', !R.isComplete(d2));
 
 /* --- spawn capacity -------------------------------------------------------- */
 s = blank();

@@ -8,27 +8,18 @@
   var TRAY_SETS = 3;                 // measured; see the tuning note below
 
   /* ---- tuning knobs -------------------------------------------------------
-     Five points for a finished piece and nothing for the steps along the way, so
-     the target is seven finished pieces. That lines up with the ear exactly:
-     seven piercings, 35 / 7 = 5 points each, so ONE finished piece fills ONE
-     piercing. The meter and the score stop being two separate ideas.
+     Every merge counts one, so the score is a plain tally of pieces made. The
+     gift's weighted table existed to land exactly on 35 — his age — and there is
+     no target to land on any more.
 
-     Seven pieces is 21 merges, which smoke.html measures at around 28 seconds.
-     Two earlier models were both rejected by testing: scoring every merge ran to
-     47s and testers were flagging it as long by 26 points, and scoring only
-     finished pieces at 1 point each ran to a hopeless 105 drags.
-
-     Endless has no target to land on, so it keeps the flatter scoring, where the
-     number simply counts how many pieces you have made. */
-  var TARGET      = 35;
-  var SCORING     = {
-    birthday: { 2: 0, 3: 5 },        // 7 finished pieces, one per piercing
-    endless:  { 2: 1, 3: 1 }         // every merge counts
-  };
+     START_PIECES, SPAWN_BIAS and the partner bias are measured for exactly three
+     chains on a 25-cell tray. Do not change them without re-running tuning.html;
+     six chains at once starves pairs and every number here needs re-deriving. */
+  var SCORING      = { 2: 1, 3: 1, 4: 1 };
   var START_PIECES = 10;
-  var EAR_SLOTS   = 7;               // 35 / 7 = one filled piercing per 5 points
-  var SPAWN_BIAS  = 0.65;            // chance a spawn favours a set already
-                                     // on the board, so chains stay completable
+  var SPAWN_BIAS   = 0.65;           // chance a spawn favours a set already on the
+                                     // board, so chains stay completable
+  var PIECES_PER_SET = 3;            // finished pieces that retire a set
 
   /* Deterministic RNG so tests are reproducible and a seed can replay a game. */
   function mulberry32(seed) {
@@ -137,8 +128,7 @@
   }
 
   function pointsFor(state, tier) {
-    var table = state.endless ? SCORING.endless : SCORING.birthday;
-    return table[tier] || 0;
+    return SCORING[tier] || 0;
   }
 
   function canMerge(a, b) {
@@ -236,23 +226,23 @@
     return [{ type: 'dissolve', index: oldest, piece: gone }];
   }
 
-  function earFilled(state) {
-    return Math.min(EAR_SLOTS, Math.floor(state.score / (TARGET / EAR_SLOTS)));
-  }
-
+  /* Endless has no completion at all — it ends when the player presses стоп,
+     which is a UI action, not a rule. Demo ends when the three sets it opened
+     with are all retired. */
   function isComplete(state) {
-    return !state.endless && state.score >= TARGET;
+    if (state.mode !== 'demo') return false;
+    return state.opening.every(function (k) { return state.done.indexOf(k) >= 0; });
   }
 
   root.Rules = {
     GRID: GRID, CELLS: CELLS, TRAY_SETS: TRAY_SETS,
-    TARGET: TARGET, SCORING: SCORING, EAR_SLOTS: EAR_SLOTS,
+    SCORING: SCORING, PIECES_PER_SET: PIECES_PER_SET,
     pointsFor: pointsFor,
     mulberry32: mulberry32,
     createState: createState, emptyCells: emptyCells,
     spawn: spawn, setsWantingPartner: setsWantingPartner,
     canMerge: canMerge, classify: classify, apply: apply, isCell: isCell,
     hasLegalMove: hasLegalMove, relieve: relieve,
-    earFilled: earFilled, isComplete: isComplete
+    isComplete: isComplete
   };
 })(typeof window !== 'undefined' ? window : globalThis);
