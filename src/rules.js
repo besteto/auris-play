@@ -5,8 +5,7 @@
 
   var GRID = 5;
   var CELLS = GRID * GRID;
-  var MAX_TIER = 3;
-  var COLLECTIONS = ['cassiopea', 'marchesa', 'farfalla'];
+  var TRAY_SETS = 3;                 // measured; see the tuning note below
 
   /* ---- tuning knobs -------------------------------------------------------
      Five points for a finished piece and nothing for the steps along the way, so
@@ -28,7 +27,7 @@
   };
   var START_PIECES = 10;
   var EAR_SLOTS   = 7;               // 35 / 7 = one filled piercing per 5 points
-  var SPAWN_BIAS  = 0.65;            // chance a spawn favours a collection already
+  var SPAWN_BIAS  = 0.65;            // chance a spawn favours a set already
                                      // on the board, so chains stay completable
 
   /* Deterministic RNG so tests are reproducible and a seed can replay a game. */
@@ -43,22 +42,51 @@
     };
   }
 
-  function createState(seed) {
+  /* `opts.sets` is an ordered list of descriptors, {key, tiers}, built by
+     Manifest. The first three go on the tray, the rest queue behind them. Rules
+     never learn what a collection is; ordering is somebody else's decision. */
+  function createState(seed, opts) {
+    opts = opts || {};
+    var all = (opts.sets || []).slice();
+    if (all.length < TRAY_SETS) {
+      throw new Error('createState needs at least ' + TRAY_SETS + ' sets');
+    }
+
     var state = {
       cells: new Array(CELLS).fill(null),
       score: 0,
       seq: 0,          // piece id counter, also doubles as birth order
       rng: mulberry32(seed === undefined ? 1 : seed),
-      endless: false
+      mode: opts.mode === 'demo' ? 'demo' : 'endless',
+      all: all,
+      tray: all.slice(0, TRAY_SETS),
+      queue: all.slice(TRAY_SETS),
+      done: [],
+      finished: {}
     };
-    /* Deal the opening hand round-robin rather than at random, so the first
-       thing he sees has all three collections on it. Left to chance, a tray
-       can open almost entirely one colour, which reads as a duller game than
-       it is. Positions are still random. */
+
+    /* Demo is over when the three sets it opened with are all finished. Captured
+       here because the tray changes underneath as sets retire. */
+    state.opening = state.tray.map(function (d) { return d.key; });
+
+    /* Deal the opening hand round-robin rather than at random, so the first tray
+       has all three sets on it. Left to chance, a tray can open almost entirely
+       one chain, which reads as a duller game than it is. Positions are still
+       random. */
     for (var i = 0; i < START_PIECES; i++) {
-      spawn(state, undefined, COLLECTIONS[i % COLLECTIONS.length]);
+      spawn(state, undefined, state.tray[i % state.tray.length].key);
     }
     return state;
+  }
+
+  function descriptorFor(state, key) {
+    for (var i = 0; i < state.tray.length; i++) {
+      if (state.tray[i].key === key) return state.tray[i];
+    }
+    for (var j = 0; j < state.all.length; j++) {
+      if (state.all[j].key === key) return state.all[j];
+    }
+    return null;
   }
 
   function emptyCells(state) {
@@ -67,34 +95,43 @@
     return out;
   }
 
-  /* Collections holding an ODD number of tier-1s, i.e. one piece sitting without
-     a partner. Biasing spawns toward these completes pairs the player can see.
+  /* Sets holding an ODD number of tier-1s, i.e. one piece sitting without a
+     partner. Biasing spawns toward these completes pairs the player can see.
 
-     The first attempt biased toward "any collection already on the tray", which
-     ran away: whichever collection got ahead kept being picked until the tray was
-     effectively one collection and the other two never appeared. */
-  function collectionsWantingPartner(state) {
+     The first attempt biased toward "any set already on the tray", which ran
+     away: whichever set got ahead kept being picked until the tray was
+     effectively one chain and the other two never appeared. */
+  function setsWantingPartner(state) {
     var count = {};
     for (var i = 0; i < CELLS; i++) {
       var p = state.cells[i];
-      if (p && p.tier === 1) count[p.collection] = (count[p.collection] || 0) + 1;
+      if (p && p.tier === 1) count[p.key] = (count[p.key] || 0) + 1;
     }
-    return COLLECTIONS.filter(function (c) { return (count[c] || 0) % 2 === 1; });
+    return state.tray
+      .map(function (d) { return d.key; })
+      .filter(function (k) { return (count[k] || 0) % 2 === 1; });
   }
 
-  function spawn(state, forceIndex, forceCollection) {
+  function spawn(state, forceIndex, forceKey) {
     var free = emptyCells(state);
     if (!free.length) return [];
 
     var idx = forceIndex !== undefined ? forceIndex
             : free[Math.floor(state.rng() * free.length)];
 
-    var pool = COLLECTIONS;
-    var wanting = collectionsWantingPartner(state);
+    var pool = state.tray.map(function (d) { return d.key; });
+    var wanting = setsWantingPartner(state);
     if (wanting.length && state.rng() < SPAWN_BIAS) pool = wanting;
-    var collection = forceCollection || pool[Math.floor(state.rng() * pool.length)];
+    var key = forceKey || pool[Math.floor(state.rng() * pool.length)];
 
-    var piece = { id: ++state.seq, collection: collection, tier: 1, born: state.seq };
+    var d = descriptorFor(state, key);
+    var piece = {
+      id: ++state.seq,
+      key: key,
+      tier: 1,
+      top: d ? d.tiers : 3,
+      born: state.seq
+    };
     state.cells[idx] = piece;
     return [{ type: 'spawn', index: idx, piece: piece }];
   }
@@ -106,9 +143,9 @@
 
   function canMerge(a, b) {
     return !!a && !!b && a !== b
-        && a.collection === b.collection
+        && a.key === b.key
         && a.tier === b.tier
-        && a.tier < MAX_TIER;
+        && a.tier < a.top;
   }
 
   /* A cell index must be a whole number on the tray. Testing the negation
@@ -144,8 +181,9 @@
 
     var merged = {
       id: ++state.seq,
-      collection: a.collection,
+      key: a.key,
       tier: a.tier + 1,
+      top: a.top,
       born: state.seq
     };
     state.cells[from] = null;
@@ -158,7 +196,7 @@
 
     /* A top-tier piece is the payoff: it scores, shows itself, then dissolves and
        flies to the ear. Keeping it on the board is what would clog the tray. */
-    if (merged.tier === MAX_TIER) {
+    if (merged.tier === merged.top) {
       state.cells[to] = null;
       events.push({ type: 'score', index: to, piece: merged, points: gained });
     }
@@ -168,7 +206,7 @@
     /* A finished piece costs four tier-1s but only three merges, so one extra
        tier-1 arrives with each crown. That keeps the tray stocked at a steady
        level without the player having to keep tapping the pouch. */
-    if (merged.tier === MAX_TIER) events = events.concat(spawn(state));
+    if (merged.tier === merged.top) events = events.concat(spawn(state));
 
     return events;
   }
@@ -207,12 +245,13 @@
   }
 
   root.Rules = {
-    GRID: GRID, CELLS: CELLS, MAX_TIER: MAX_TIER, COLLECTIONS: COLLECTIONS,
+    GRID: GRID, CELLS: CELLS, TRAY_SETS: TRAY_SETS,
     TARGET: TARGET, SCORING: SCORING, EAR_SLOTS: EAR_SLOTS,
     pointsFor: pointsFor,
     mulberry32: mulberry32,
     createState: createState, emptyCells: emptyCells,
-    spawn: spawn, canMerge: canMerge, classify: classify, apply: apply, isCell: isCell,
+    spawn: spawn, setsWantingPartner: setsWantingPartner,
+    canMerge: canMerge, classify: classify, apply: apply, isCell: isCell,
     hasLegalMove: hasLegalMove, relieve: relieve,
     earFilled: earFilled, isComplete: isComplete
   };
