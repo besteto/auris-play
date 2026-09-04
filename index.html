@@ -23,10 +23,12 @@
     <p class="title-edition">Studio&nbsp;Edition</p>
     <div class="title-rule"></div>
     <nav class="title-menu">
-      <button class="btn btn-gold" data-act="play-endless">Играть</button>
-      <button class="btn" data-act="play-demo">Бесконечный режим</button>
-      <button class="btn" data-act="collections">Коллекции</button>
-      <button class="btn btn-quiet" data-act="manual">Как играть</button>
+      <button class="btn btn-gold" data-act="play-endless" data-i18n="btn.play">Играть</button>
+      <button class="btn" data-act="play-demo" data-i18n="btn.demo">Коллекция</button>
+      <button class="btn" data-act="collections" data-i18n="btn.collections">Коллекции</button>
+      <button class="btn btn-quiet" data-act="board" data-i18n="btn.board">Рекорды</button>
+      <button class="btn btn-quiet" data-act="manual" data-i18n="btn.manual">Как играть</button>
+      <button class="lang-toggle" data-act="lang">RU / EN</button>
     </nav>
   </div>
 </section>
@@ -41,6 +43,7 @@
     </div>
 
     <button class="icon-btn" data-act="mute" aria-label="Звук"><span id="mute-glyph">♪</span></button>
+    <button class="btn btn-stop" data-act="stop" data-i18n="btn.stop">Стоп</button>
   </header>
 
   <!-- set progress pips -->
@@ -60,38 +63,91 @@
   <div class="toast" id="toast" hidden></div>
 </section>
 
-<!-- ══ PAYOFF ═════════════════════════════════════════════════════════════ -->
-<section id="screen-payoff" class="screen">
-  <article class="plate catalogue" id="catalogue">
+<!-- ══ SET PLATE (overlay) ════════════════════════════════════════════════ -->
+<div id="set-plate" class="overlay" hidden>
+  <article class="plate catalogue">
     <img class="plate-mark" src="assets/logo/mark-dark.png" alt="AURIS">
-    <p class="plate-eyebrow">VLAD IS LOVE · Birthday edition</p>
-
-    <figure class="cat-portrait">
-      <img src="assets/portrait/vlad.jpg" alt="Влад Бодмодов">
-    </figure>
-
-    <h1 class="cat-title">Коллекция<br><em>«Влад Бодмодов»</em></h1>
-    <p class="cat-ref">REF.&nbsp;35</p>
-
+    <p class="plate-eyebrow" id="set-plate-eyebrow"></p>
+    <figure class="cat-shot"><img id="set-plate-shot" src="" alt=""></figure>
+    <h1 class="cat-title" id="set-plate-title"></h1>
+    <p class="cat-ref" id="set-plate-ref"></p>
     <div class="cat-rule"></div>
+    <p class="cat-body" id="set-plate-body"></p>
+    <dl class="cat-specs" id="set-plate-specs"></dl>
+  </article>
+</div>
 
-    <p class="cat-body">
-      Изысканный силуэт, созданный по индивидуальному заказу.
-      Неповторим&nbsp;— другого такого нет.
-      Самый лучший и запоминающийся навсегда.
-    </p>
-
+<!-- ══ COLLECTION PLATE — the demo ending ═════════════════════════════════ -->
+<section id="screen-collection-plate" class="screen">
+  <article class="plate catalogue">
+    <img class="plate-mark" src="assets/logo/mark-dark.png" alt="AURIS">
+    <p class="plate-eyebrow" data-i18n="plate.eyebrow">Auris</p>
+    <figure class="cat-shot"><img id="coll-plate-hero" src="" alt=""></figure>
+    <h1 class="cat-title" id="coll-plate-title"></h1>
     <div class="cat-rule"></div>
-    <dl class="cat-specs">
-      <div><dt>тираж</dt><dd>1&nbsp;экз.</dd></div>
-      <div><dt>материал</dt><dd>любовь</dd></div>
-      <div class="cat-credit"><dt>голос</dt><dd>любящая сестра Алёнушка</dd></div>
-    </dl>
-
+    <p class="cat-body" id="coll-plate-body"></p>
     <nav class="cat-menu">
-      <button class="btn btn-gold" data-act="play-endless">Ещё раз</button>
-      <button class="btn btn-quiet" data-act="collections">Коллекции</button>
-      <button class="btn btn-quiet" data-act="home">В меню</button>
+      <button class="btn btn-gold" data-act="demo-again" data-i18n="btn.again">Ещё раз</button>
+      <button class="btn" data-act="contacts" data-i18n="btn.contacts">Контакты</button>
+      <button class="btn btn-quiet" data-act="home" data-i18n="btn.menu">В меню</button>
+    </nav>
+  </article>
+</section>
+
+<!-- ══ INITIALS ═══════════════════════════════════════════════════════════ -->
+<section id="screen-initials" class="screen">
+  <article class="plate">
+    <p class="plate-eyebrow" data-i18n="initials.eyebrow">Ваш результат</p>
+    <h2 class="plate-title" data-i18n="initials.title">Три буквы</h2>
+    <p class="initials-score"><span id="initials-score">0</span></p>
+    <div class="initials-slots">
+      <button class="initials-slot is-on" data-slot="0">А</button>
+      <button class="initials-slot" data-slot="1">А</button>
+      <button class="initials-slot" data-slot="2">А</button>
+    </div>
+    <div class="initials-pad" id="initials-pad"></div>
+    <nav class="cat-menu">
+      <button class="btn btn-gold" data-act="initials-ok" data-i18n="btn.ok">Готово</button>
+      <button class="btn btn-quiet" data-act="board" data-i18n="btn.skip">Пропустить</button>
+    </nav>
+  </article>
+</section>
+
+<!-- ══ BOARD ══════════════════════════════════════════════════════════════ -->
+<section id="screen-board" class="screen">
+  <article class="plate">
+    <button class="plate-close" data-act="home" aria-label="×">×</button>
+    <p class="plate-eyebrow" data-i18n="board.eyebrow">Auris</p>
+    <h2 class="plate-title" data-i18n="board.title">Рекорды дня</h2>
+    <ol class="board-list" id="board-list"></ol>
+    <p class="board-note" data-i18n="board.note">Доска обнуляется каждый день.</p>
+    <nav class="cat-menu">
+      <button class="btn btn-gold" data-act="play-endless" data-i18n="btn.again">Ещё раз</button>
+      <button class="btn btn-quiet" data-act="home" data-i18n="btn.menu">В меню</button>
+    </nav>
+  </article>
+</section>
+
+<!-- ══ CONTACTS ═══════════════════════════════════════════════════════════ -->
+<section id="screen-contacts" class="screen">
+  <article class="plate">
+    <button class="plate-close" data-act="home" aria-label="×">×</button>
+    <p class="plate-eyebrow" data-i18n="contacts.eyebrow">Auris</p>
+    <h2 class="plate-title" data-i18n="contacts.title">Забрать с собой</h2>
+    <ul class="qr-list">
+      <li>
+        <img class="qr" id="qr-auris" src="assets/qr/auris.png" alt="">
+        <img class="qr-mark" src="assets/logo/auris-horiz-dark.png" alt="AURIS">
+        <span data-i18n="contacts.auris">украшения</span>
+      </li>
+      <li>
+        <img class="qr" src="assets/qr/scalpelburg.png" alt="">
+        <img class="qr-mark" src="assets/logo/scalpelburg.png" alt="Scalpelburg">
+        <span data-i18n="contacts.scalpelburg">студия пирсинга</span>
+      </li>
+    </ul>
+    <nav class="cat-menu">
+      <button class="btn btn-quiet" data-act="home" data-i18n="btn.menu">В меню</button>
     </nav>
   </article>
 </section>

@@ -39,6 +39,12 @@
   var featured = null;       // featured collection id for demo mode
   var pendingPlate = null;   // set key of completed chain awaiting plate overlay
 
+  var PLATE_MS = 3000;
+  var plateTimer = 0;
+  var initials = ['А', 'А', 'А'];
+  var slot = 0;
+  var pendingScore = 0;
+
   var tray = document.getElementById('tray');
   var scoreEl = document.getElementById('score');
   var toastEl = document.getElementById('toast');
@@ -229,8 +235,6 @@
       } else if (e.type === 'dissolve') {
         toast('убрано в сейф');
       } else if (e.type === 'setComplete') {
-        /* Task 9 turns this into the catalogue plate overlay; for now the swap
-           itself is the visible reward. */
         pendingPlate = e.key;
       }
     });
@@ -239,11 +243,13 @@
     drawHud();
     if (scored) bumpScore();
 
-    if (R.isComplete(state)) {
-      busy = true;
-      setTimeout(showPayoff, 900);
-      return;
+    if (pendingPlate) {
+      var key = pendingPlate;
+      pendingPlate = null;
+      showSetPlate(key);
     }
+
+    if (R.isComplete(state)) return;
 
     /* The tray must never dead-end in front of a client in the chair. Endless
        has no end state to fall through to, so this is not a courtesy any more --
@@ -387,7 +393,7 @@
 
   /* ── screens ───────────────────────────────────────────────────────────── */
   function show(id) {
-    if (id !== 'screen-payoff') { Sfx.stop('celebrate'); Sfx.stop('voice'); }
+    if (id !== 'screen-collection-plate') { Sfx.stop('celebrate'); Sfx.stop('voice'); }
     var screens = document.querySelectorAll('.screen');
     for (var i = 0; i < screens.length; i++) screens[i].classList.remove('is-on');
     document.getElementById(id).classList.add('is-on');
@@ -447,10 +453,129 @@
     show('screen-collections');
   }
 
-  function showPayoff() {
-    show('screen-payoff');
-    Sfx.play('celebrate');
-    Sfx.play('voice');        /* layered over the sting, silent if not recorded */
+  /* The rung reward. An overlay, not a screen: it dims the tray and is
+     tap-skippable, because a client about to be called should not have to wait
+     out a reward. */
+  function showSetPlate(key) {
+    var p = pair(key);
+    if (!p) return;
+    var plate = (p.set.plate && p.set.plate[lang]) || {};
+    document.getElementById('set-plate-eyebrow').textContent = p.collection.name[lang];
+    document.getElementById('set-plate-title').textContent = p.set.name[lang];
+    document.getElementById('set-plate-ref').textContent = plate.ref || '';
+    document.getElementById('set-plate-body').textContent = plate.body || '';
+    document.getElementById('set-plate-shot').src =
+      'assets/plates/' + p.collection.id + '_' + p.set.id + '.jpg';
+
+    var specs = document.getElementById('set-plate-specs');
+    specs.innerHTML = '';
+    Object.keys(plate.specs || {}).forEach(function (k) {
+      var row = document.createElement('div');
+      row.innerHTML = '<dt></dt><dd></dd>';
+      row.querySelector('dt').textContent = k;
+      row.querySelector('dd').textContent = plate.specs[k];
+      specs.appendChild(row);
+    });
+
+    var box = document.getElementById('set-plate');
+    box.hidden = false;
+    box.style.setProperty('--accent', p.collection.accent);
+    clearTimeout(plateTimer);
+    plateTimer = setTimeout(hideSetPlate, PLATE_MS);
+
+    if (R.isComplete(state)) {
+      clearTimeout(plateTimer);
+      plateTimer = setTimeout(function () {
+        hideSetPlate();
+        showCollectionPlate(featured);
+      }, PLATE_MS);
+    }
+  }
+
+  function hideSetPlate() {
+    clearTimeout(plateTimer);
+    document.getElementById('set-plate').hidden = true;
+  }
+
+  document.getElementById('set-plate').addEventListener('click', hideSetPlate);
+
+  /* стоп is a control, not an event: the client is called at an unpredictable
+     moment and must be able to leave with their score recorded. */
+  function stopRun() {
+    if (!state) { show('screen-title'); return; }
+    var score = state.score;
+    state = null;
+    if (Board.qualifies(score) && score > 0) showInitials(score);
+    else showBoard();
+  }
+
+  function showInitials(score) {
+    initials = ['А', 'А', 'А'];
+    slot = 0;
+    document.getElementById('initials-score').textContent = score;
+    pendingScore = score;
+    buildPad();
+    drawInitials();
+    show('screen-initials');
+  }
+
+  /* An on-screen alphabet, not a keyboard: three taps and out. */
+  function buildPad() {
+    var letters = lang === 'ru'
+      ? 'АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЩЭЮЯ'
+      : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    var pad = document.getElementById('initials-pad');
+    pad.innerHTML = '';
+    for (var i = 0; i < letters.length; i++) {
+      var b = document.createElement('button');
+      b.className = 'pad-key';
+      b.textContent = letters[i];
+      b.dataset.letter = letters[i];
+      pad.appendChild(b);
+    }
+  }
+
+  function drawInitials() {
+    var slots = document.querySelectorAll('.initials-slot');
+    for (var i = 0; i < slots.length; i++) {
+      slots[i].textContent = initials[i];
+      slots[i].classList.toggle('is-on', i === slot);
+    }
+  }
+
+  function showBoard() {
+    var list = document.getElementById('board-list');
+    list.innerHTML = '';
+    Board.rows().forEach(function (row) {
+      var li = document.createElement('li');
+      li.innerHTML = '<span class="board-initials"></span><span class="board-score"></span>';
+      li.querySelector('.board-initials').textContent = row.initials;
+      li.querySelector('.board-score').textContent = row.score;
+      list.appendChild(li);
+    });
+    show('screen-board');
+  }
+
+  function showCollectionPlate(collectionId) {
+    var c = null;
+    Collections.forEach(function (x) { if (x.id === collectionId) c = x; });
+    if (!c) c = Collections[0];
+    document.getElementById('coll-plate-title').textContent = c.name[lang];
+    document.getElementById('coll-plate-body').textContent =
+      (c.plate && c.plate[lang] && c.plate[lang].body) || '';
+    document.getElementById('coll-plate-hero').src = c.hero;
+    document.body.style.setProperty('--accent', c.accent);
+    featured = c.id;
+    show('screen-collection-plate');
+  }
+
+  /* The Auris code points at the collection the client just assembled when they
+     arrive from demo, and at the catalogue otherwise. */
+  function showContacts(collectionId) {
+    var file = 'assets/qr/auris.png';
+    if (collectionId) file = 'assets/qr/auris_' + collectionId + '.png';
+    document.getElementById('qr-auris').src = file;
+    show('screen-contacts');
   }
 
   function syncMuteGlyph() {
@@ -476,6 +601,19 @@
       case 'pouch':
         if (!busy) runEvents(R.spawn(state));
         break;
+      case 'stop':          stopRun(); break;
+      case 'board':         showBoard(); break;
+      case 'contacts':      showContacts(featured); break;
+      case 'demo-again':    start('demo', featured); break;
+      case 'initials-ok':
+        Board.add(initials.join(''), pendingScore);
+        showBoard();
+        break;
+      case 'lang':
+        lang = lang === 'ru' ? 'en' : 'ru';
+        localStorage.setItem('auris.lang', lang);
+        applyCopy(lang);
+        break;
     }
   });
 
@@ -483,22 +621,38 @@
     if (ev.target === this) this.hidden = true;
   });
 
+  document.getElementById('initials-pad').addEventListener('click', function (ev) {
+    var k = ev.target.closest('.pad-key');
+    if (!k) return;
+    initials[slot] = k.dataset.letter;
+    slot = (slot + 1) % 3;
+    drawInitials();
+  });
+
+  document.querySelector('.initials-slots').addEventListener('click', function (ev) {
+    var s = ev.target.closest('.initials-slot');
+    if (!s) return;
+    slot = parseInt(s.dataset.slot, 10);
+    drawInitials();
+  });
+
   syncMuteGlyph();
 
   /* Deep links, so any screen can be previewed without playing to it:
-     #manual, #endless, #demo/*, #collections */
+     #manual, #endless, #demo/*, #collections, #board, #contacts */
   (function (hash) {
     if (hash === '#manual') document.getElementById('manual').hidden = false;
     else if (hash === '#endless') start('endless');
     else if (hash.indexOf('#demo/') === 0) start('demo', hash.slice(6));
     else if (hash === '#collections') showCollections();
+    else if (hash === '#board') showBoard();
+    else if (hash === '#contacts') showContacts();
   })(location.hash);
 
   /* exposed so the smoke test can drive a full game headlessly */
   window.Game = {
     start: start,
     attempt: attempt,
-    getState: function () { return state; },
-    showPayoff: showPayoff
+    getState: function () { return state; }
   };
 })();
