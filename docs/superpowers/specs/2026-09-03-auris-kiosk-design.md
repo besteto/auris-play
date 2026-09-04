@@ -1,8 +1,8 @@
 # Auris Play — Studio Kiosk
 
 A play section for the Auris business, derived from the `ref-35` birthday gift.
-Target: a tablet on the Saint Scalpelburg studio floor, handed to a client
-waiting for their appointment.
+Target since revision 3: the client's own phone, with a tablet on the Saint
+Scalpelburg studio floor as a configuration of the same build.
 
 Supersedes nothing. `ref-35` is a finished, delivered gift and is not touched by
 this work; this repository is a fork of its code with the personal layer removed.
@@ -11,6 +11,10 @@ Revision 2 (2026-09-03) replaces the collection ladder of revision 1 with two
 modes, and makes the **set**, not the collection, the unit on the tray. The ear is
 parked. See `DECISIONS.md`, block 2.
 
+Revision 3 (2026-09-04) demotes the tablet. The client's own phone is now the
+primary carrier and the studio tablet a configuration of it, reached by an explicit
+flag. See `DECISIONS.md`, block 4.
+
 ## Goal
 
 Give a waiting client something worth picking up that leaves them knowing what
@@ -18,33 +22,39 @@ Auris makes. The jewellery is the content, so playing is browsing the catalogue
 without it feeling like browsing a catalogue.
 
 Success is that a client plays it unprompted and puts it down when called without
-feeling interrupted.
+feeling interrupted — and, since revision 3, that the same page is worth keeping on
+the phone they walked in with.
 
 ## Non-goals
 
 - **The kiosk measures nothing.** It collects, stores and transmits nothing about
   the person playing. Demo mode ends on a contacts screen, but that is a door, not
-  a funnel: it is offered once, at a natural ending, and the tablet learns nothing
-  from it. What Auris's own site records about visits is Auris's business and
-  outside this repository — see the QR rule under Screens.
+  a funnel: it is offered once, at a natural ending, and the page learns nothing
+  from it. This binds on a phone exactly as it binds on the tablet. What Auris's
+  own site records about visits is Auris's business and outside this repository —
+  see the QR rule under Screens.
 - **No sharing.** No OG cards, no share buttons, no per-player result image.
 - **No personal layer.** Vlad's portrait, the «Влад Бодмодов» REF. 35 plate and
   the voice recording are all removed. See Rights.
-- **No account, no server.** Everything is static and local to the tablet.
+- **No account, no server.** Everything is static and local to the device.
 
 ## Constraints
 
 | | |
 |---|---|
-| Device | One shared tablet, touch, Chrome in kiosk mode |
+| Device | The client's own phone by default; a shared studio tablet under `#kiosk` |
 | Network | Studio wifi, assumed unreliable — must survive a dropout mid-session |
 | Audience | Strangers, one after another, sessions bounded by an appointment |
 | Language | Russian and English |
 | Build | No build step, no dependencies, no package manager — inherited and kept |
 
 The single-tablet-shared-by-strangers constraint drives more of this design than
-anything else: whatever is on screen is visible to the next person, whatever gets
-typed in stays typed, and no session may leave state behind for the next one.
+anything else — but only where it applies: whatever is on screen is visible to the
+next person, whatever gets typed in stays typed, and no session may leave state
+behind for the next one. On a phone that belongs to one person none of that holds,
+and the behaviours it justifies become wrong rather than merely unnecessary. Which
+constraint is in force is decided by the flag, never guessed. See *The carrier is a
+flag*.
 
 ## Modes
 
@@ -144,7 +154,7 @@ Two meters, two jobs: pips are progress inside the current set, the score is tot
 output.
 
 The board is **top ten by score, three-letter initials, arcade style**, held in
-`localStorage` and cleared whenever the tablet's local calendar date changes from
+`localStorage` and cleared whenever the device's local calendar date changes from
 the one stored with the board.
 
 Three letters rather than a name is a kiosk decision, not a stylistic one: it needs
@@ -156,6 +166,33 @@ also make the studio the custodian of personal data it has no reason to hold.
 **Demo scores are not recorded.** Demo is bounded by the size of three sets and
 endless is not, so the two numbers are not comparable and putting them in one table
 would be a lie. Demo ends on the collection plate instead.
+
+### The carrier is a flag, not a guess
+
+One build serves both carriers. It behaves as a **phone** by default and as a
+**kiosk** only when the address carries `#kiosk`, which is typed once into the
+tablet's bookmark and remembered in `localStorage` from then on.
+
+The carrier is never inferred from screen width or touch support. A tablet and a
+large phone are indistinguishable by measurement, and a wrong guess is costly in
+both directions: an idle reset firing on someone's own phone eats a run they walked
+away from for a moment, and a missing one on the tablet hands the next client a
+half-played tray. A flag is one line of configuration and cannot be wrong by
+accident.
+
+What the flag governs:
+
+| | Phone (default) | Kiosk (`#kiosk`) |
+|---|---|---|
+| Idle reset | none | 60s in play, 30s static |
+| Attract loop | none | slow cycle behind the title |
+| Sound | muted by default, as on the kiosk | muted by default |
+| Contacts | tappable links, new tab | QR codes, no outbound links |
+| Board | the phone's own record | the day's board on a shared screen |
+
+The board carries a wording problem the flag does not solve: «Рекорды дня» is a
+shared-screen phrase, and on a personal phone the same `localStorage` table is one
+person's own record. It is an open question, not a decision — see `OPEN.md`.
 
 ## Content model
 
@@ -323,11 +360,23 @@ The **collection plate** ends demo, full screen, and offers exactly two things:
 *ещё раз* — which reshuffles to a different trio of sets, so a second run is not the
 first one again — and *контакты*.
 
-The **contacts screen** is new, and is where the QR codes live. On a tablet in
-Chrome kiosk mode a `target="_blank"` to `aurisjewellery.com` strands the client on
-a website with no way back, so **both outbound links become QR codes** and the
-client takes the shop away on their own phone. The collections screen's boutique
-block loses its links to the same screen.
+The **contacts screen** is new, and it branches on the carrier.
+
+On a **phone**, the client is already holding the device the shop needs to reach,
+so the screen is two large tappable rows opening in a new tab. No QR is drawn at
+all: a code photographed off the screen it is displayed on is a device asking
+itself for its own address.
+
+On the **kiosk**, `target="_blank"` to `aurisjewellery.com` strands the client on a
+website with no way back, so both outbound links become QR codes and the client
+takes the shop away on their own phone. The collections screen's boutique block
+loses its links to the same screen.
+
+A code that must be photographed is the whole content of the screen it sits on:
+**one code at a time, sized `min(72vw, 60vh, 420px)`**, not two side by side. Two
+132px codes were the first draft and they are too small to scan at arm's length
+under studio glare. Arriving from demo the first code is the collection the client
+just assembled; Scalpelburg follows.
 
 Two codes, two targets:
 
@@ -356,6 +405,20 @@ Deep links (`#game`, `#manual`, `#collections`, ...) are kept for development an
 extended to cover the new screens, including `#demo/<collection>` — which is also
 how the tablet is pointed at the featured collection.
 
+### Scale on a phone
+
+The layout is already fluid where the game is: the tray is `min(94vw, 60vh, 440px)`
+— 94% of the width of a 412px phone, at 77px a cell — and the plates run to the
+full width of the screen inside their padding. The tray, the pieces and the pips
+are not to be touched: `START_PIECES` and `SPAWN_BIAS` are measured against that
+geometry.
+
+What does not scale is the catalogue micro-typography: eighteen rules pinned at
+9–12px, nearly all of them letterspaced 0.2–0.36em, which is the hardest thing to
+read on a small screen. Plate eyebrows sit at 10px, `REF.` and the specs at 11px,
+the QR caption at 10px. These move to `clamp()` with a phone floor — eyebrows 12px,
+specs and `REF.` 13px — and shed some of their letterspacing on narrow screens.
+
 ## Copy
 
 `data/copy.js` holding `{ ru: {}, en: {} }`, roughly forty keys, with `data-i18n`
@@ -372,7 +435,9 @@ actually built. The strings are currently inline in `index.html`.
 
 ## Kiosk plumbing
 
-None of this exists in the gift.
+None of this exists in the gift, and **all of it lives behind `#kiosk`**. On a
+phone every item below is either absent or, in the case of the service worker,
+kept for its own sake rather than for the floor.
 
 - **Idle reset.** No pointer event for 60s in play, or 30s on a static screen,
   returns to attract and *discards state*. The next client must never inherit a

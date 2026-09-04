@@ -1715,6 +1715,21 @@ git commit -m "Add стоп, initials, the board and the demo ending"
 
 ### Task 10: Copy — RU and EN
 
+**Revision 3 amendments (block 4, decisions Р-028..Р-030). Read these before Step 1.**
+
+- `'btn.demo'` becomes **`'Собрать коллекцию'`** / `'Build a collection'`. As drafted
+  it read `'Коллекция'`, which sits one line above `'Коллекции'` in the title menu
+  and is indistinguishable from it at a glance on a kiosk.
+- The board keys (`'board.title'`, `'board.note'`) are **blocked** by open question 8:
+  «Рекорды дня» is a shared-screen phrase and the same `localStorage` table on a
+  personal phone is one person's own record. Write the keys with the current wording,
+  leave a `TODO(open-8)` comment beside them, and do not invent a second wording.
+- Add the contacts keys the phone branch needs (`'contacts.open'` or similar) only
+  when Task 12 defines them. Do not guess them here.
+- Manual steps 8 and 9 and the `step-nine` block are **already deleted** (commit
+  `6b8a83b`), as are the Birthday Edition strings. Step 2 below still stands for the
+  rest of the markup; just do not expect to find those.
+
 **Files:**
 - Create: `data/copy.js`
 - Modify: `src/game.js` (`applyCopy`), `index.html` (`data-i18n` on every string)
@@ -1842,6 +1857,25 @@ git commit -m "Extract every string into a two-language copy file"
 
 ### Task 11: Kiosk plumbing — idle reset, muted sound, attract loop
 
+**Revision 3 amendments (block 4, decision Р-028). Read these before Step 1.**
+
+The phone, not the tablet, is now the primary carrier, and **everything in this task
+lives behind an explicit `#kiosk` flag**. The task is not cancelled; it is narrowed.
+
+- `src/kiosk.js` gains one more job, and it comes first: **`Kiosk.is()`**, the single
+  place that answers which carrier this is. It is true when the address carries
+  `#kiosk`, and that answer is written to `localStorage` so the tablet keeps it across
+  reloads and across the deep links (`#endless`, `#demo/...`) that replace the hash.
+  It is **never** inferred from screen width, touch support, or user agent: a tablet
+  and a large phone are indistinguishable by measurement, and a wrong guess eats a
+  run on someone's own phone or hands a half-played tray to the next client.
+- `Kiosk.start()` returns immediately unless `Kiosk.is()`. The idle reset and the
+  attract loop must not exist on a phone — an idle reset there is not a missing
+  feature, it is a bug that deletes a run the owner walked away from.
+- **Sound muted by default stays on both carriers.** It needs no flag; it is a
+  courtesy on a phone and a necessity on the floor.
+- The service worker (Task 12) also stays on both, for offline, not for the floor.
+
 **Files:**
 - Create: `src/kiosk.js`
 - Modify: `src/sfx.js` (default mute), `src/game.js` (expose a reset), `index.html`
@@ -1935,6 +1969,25 @@ git commit -m "Add idle reset and mute sound by default"
 ---
 
 ### Task 12: QR codes and the service worker
+
+**Revision 3 amendments (block 4, decision Р-029). Read these before Step 1.**
+
+The contacts screen now branches on `Kiosk.is()`:
+
+- **Phone (default): no QR is drawn at all.** The screen becomes two large tappable
+  rows — the collection's `url` from the manifest, and Scalpelburg — opening in a new
+  tab. A code photographed off the screen it is displayed on is a device asking itself
+  for its own address.
+- **Kiosk: QR codes, and one at a time.** The markup 9a shipped puts two codes of
+  132px side by side; that is 290px of a 412px screen and neither is readable at arm's
+  length under studio glare. One code fills the plate: **`min(72vw, 60vh, 420px)`**.
+  Arriving from demo the first code is the collection just assembled (this is what
+  Р-018 put `url` in the manifest for); Scalpelburg follows.
+- `tools/qr.py` is unchanged in purpose — the codes are still generated offline and
+  committed. Whether a *third* kind of code is needed (one on the studio counter that
+  opens the game itself) is open question 9 and is **not** in this task's scope.
+- The contacts copy keys for the phone branch are defined here, then added to
+  `data/copy.js`. Task 10 deliberately does not guess them.
 
 **Files:**
 - Create: `tools/qr.py`, `sw.js`
@@ -2172,18 +2225,24 @@ git commit -m "Cut sprites and plates under the set naming"
 
 - [ ] **Step 1: Delete the personal files**
 
+**Corrected in block 4: these files are not in this repository and never were.**
+Only the markup and the calls that referenced them came across from `ref-35`, so
+`git rm` fails on both paths. The portrait has been rendering as a broken image all
+along and `Sfx.play('voice')` has always been a no-op.
+
 ```bash
-git rm assets/portrait/vlad.jpg assets/sfx/voice.m4a
-rmdir assets/portrait 2>/dev/null || true
+rmdir assets/portrait 2>/dev/null || true      # empty directory, untracked
 ```
 
-Deleted, not gitignored. With the voice gone, `celebrate` falls back to the
-synthesised sting, which is an original composition and needs no clearance.
+Verify before assuming otherwise: `git ls-files assets/portrait assets/sfx`.
+`celebrate` already falls back to the synthesised sting, an original composition
+that needs no clearance.
 
 - [ ] **Step 2: Remove the voice from `src/game.js`**
 
-Delete line 432, `Sfx.play('voice');`, and its comment. Delete `'voice'` from the
-`Sfx.stop` calls on line 379.
+**Already done in Task 9b** (commit `6196124`), which retired `showPayoff` and with
+it `Sfx.play('voice')` and the `Sfx.stop('voice')` call. The `screen-payoff` markup
+and the portrait `<img>` went with it. Confirm with a grep rather than re-deleting.
 
 - [ ] **Step 3: Rewrite the LICENSE**
 
@@ -2370,6 +2429,56 @@ reminder that `sw.js`'s `CACHE` constant must be bumped on every release.
 ```bash
 git add docs/DEVELOPING.md
 git commit -m "Document the set delivery format and the kiosk runbook"
+```
+
+---
+
+### Task 17: Scale — the catalogue micro-typography
+
+Added in block 4 (decision Р-030). Pure CSS; no markup, no behaviour.
+
+**Files:**
+- Modify: `style.css`
+
+**Do not touch:** `.tray`, `.cell`, `.piece`, `.set-pip`, `--tray-max`, or the
+`@media (min-width: 720px)` block. The tray is `min(94vw, 60vh, 440px)` — 94% of a
+412px phone's width, 77px a cell — and `START_PIECES = 10` / `SPAWN_BIAS = 0.65` are
+measured against that geometry. The game is not what reads small.
+
+- [ ] **Step 1: Raise the fixed small type**
+
+Eighteen rules are pinned at 9-12px, nearly all letterspaced 0.2-0.36em, which is the
+hardest combination to read on a phone. Move them to `clamp()` with a phone floor:
+
+| Rule | Now | Floor |
+|---|---|---|
+| `.plate-eyebrow` (`:342`) | `10px` | `clamp(12px, 3.2vw, 13px)` |
+| `.cat-ref` (`:434`) | `11px` | `clamp(13px, 3.4vw, 14px)` |
+| `.cat-specs` (`:447`) | `11px` | `clamp(13px, 3.4vw, 14px)` |
+| `.qr-list span` (`:609`) | `10px` | `clamp(12px, 3.2vw, 13px)` |
+| `.cat-lineup span` (`:443`) | `9px` | `clamp(11px, 3vw, 12px)` |
+| `.board-note`, `.btn-quiet`, the remaining 9-12px rules | as found | same treatment, 12px floor |
+
+Line numbers are from the state after Task 9b; verify before editing. Where a rule
+keeps heavy letterspacing, cut it to about half below 480px — letterspacing costs
+more legibility per pixel than size does at these sizes.
+
+- [ ] **Step 2: Verify on a narrow viewport**
+
+```bash
+bash tools/pagecheck.sh '#endless' '#board' '#contacts' '#collections'
+bash tools/harness.sh tests smoke tuning
+```
+
+Then look at every plate at 412x915 and confirm nothing wraps badly, no button grows
+past its plate, and the tray is untouched. Measure the tray before and after: same
+number, or the task is wrong.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add style.css
+git commit -m "Raise the catalogue micro-typography off its pixel floors"
 ```
 
 ---
