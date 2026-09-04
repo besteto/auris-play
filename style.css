@@ -449,10 +449,6 @@ body { -webkit-user-select: none; user-select: none; touch-action: manipulation;
 .steps { margin: 0; padding: 0; list-style: none; text-align: left; font-size: 15px; line-height: 1.6; }
 .steps li { padding: 7px 0 7px 34px; text-indent: -34px; }
 .steps b { display: inline-block; width: 26px; color: var(--gold-dim); text-indent: 0; }
-.steps-rule { height: 1px; margin: 20px 0 16px; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
-.step-nine { margin: 0; font-size: 15px; letter-spacing: .18em; }
-.step-nine b { color: var(--gold-dim); margin-right: 8px; }
-.step-nine span { display: block; margin-top: 7px; font-size: 11px; letter-spacing: .06em; font-style: italic; color: #7d7268; }
 
 /* ── roomy screens ────────────────────────────────────────────────────────
    On a desktop the phone layout leaves the tray marooned in a black field: the
