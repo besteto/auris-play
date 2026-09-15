@@ -9,11 +9,13 @@ rewritten.
 
 ## Branches
 
-- `main` — the imported baseline plus the project canon (`STATE.md`, `OPEN.md`,
-  `DECISIONS.md`, the spec and plan under `docs/superpowers/`).
-- `kiosk` — the studio edition, where the work happens. GitHub Pages serves it.
+- `main` — the studio edition and the project canon (`STATE.md`, `OPEN.md`,
+  `DECISIONS.md`, the spec and plan under `docs/superpowers/`). GitHub Pages
+  serves it at https://besteto.github.io/auris-play/.
+- `kiosk` — the branch the studio edition was built on; merged into `main` and
+  kept only until Pages is confirmed to serve `main`.
 
-Branch from `kiosk` for anything you want merged into the studio edition.
+Branch from `main` and open a pull request; the tests workflow runs on every PR.
 
 ## Getting started
 
