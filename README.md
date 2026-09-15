@@ -1,8 +1,8 @@
 # AURIS · Saint Scalpelburg · Studio Edition
 
-<!-- The two workflow badges use relative paths, so they work whatever the repo
-     is eventually called and whoever owns it. The PLAY badge cannot: fill in the
-     real Pages URL on the line below once the repo exists. -->
+<!-- The two workflow badges use relative paths, so they follow the repo wherever
+     it lives: tests is .github/workflows/tests.yml, pages is the deployment GitHub
+     creates when Pages is switched on. The PLAY badge is the Pages address itself. -->
 
 [![tests](../../actions/workflows/tests.yml/badge.svg)](../../actions/workflows/tests.yml)
 [![pages](../../actions/workflows/pages/pages-build-deployment/badge.svg)](../../deployments/github-pages)

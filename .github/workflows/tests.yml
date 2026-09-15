@@ -1,0 +1,21 @@
+# The harness pages ARE the test suite; this runs them in the headless Chrome
+# that ships on the GitHub Ubuntu image. No node, no install step.
+name: tests
+
+on:
+  push:
+    branches: [main, kiosk]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rules, smoke and tuning pages
+        run: bash tools/harness.sh tests smoke tuning
+
+      - name: The real page boots on every deep link
+        run: bash tools/pagecheck.sh '#endless' '#demo/cassiopea' '#collections' '#board' '#contacts'
