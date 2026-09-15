@@ -2,7 +2,10 @@
 <style>body{font:13px ui-monospace,monospace;background:#111;color:#ddd;padding:20px}
 .f{color:#ff6b6b}.p{color:#6bcf7f}h2{color:#d4af6a}</style>
 <h2>Auris Merge — rules.js</h2><pre id="out"></pre>
+<script src="data/collections.js"></script>
+<script src="src/manifest.js"></script>
 <script src="src/rules.js"></script>
+<script src="src/board.js"></script>
 <script>
 var R = Rules, pass = 0, fail = 0, lines = [];
 function ok(name, cond, extra) {
@@ -12,41 +15,83 @@ function ok(name, cond, extra) {
 function eq(name, actual, expected) {
   ok(name, actual === expected, 'got ' + JSON.stringify(actual) + ', want ' + JSON.stringify(expected));
 }
+function fixture() {
+  return [
+    { key: 'aa/s', collection: 'aa', set: 's', tiers: 3 },
+    { key: 'bb/s', collection: 'bb', set: 's', tiers: 3 },
+    { key: 'cc/s', collection: 'cc', set: 's', tiers: 3 },
+    { key: 'dd/s', collection: 'dd', set: 's', tiers: 4 }
+  ];
+}
+function fresh(seed) {
+  return R.createState(seed === undefined ? 1 : seed, { sets: fixture() });
+}
 function blank(seed) {
-  var s = R.createState(seed === undefined ? 1 : seed);
+  var s = fresh(seed);
   s.cells = new Array(R.CELLS).fill(null); s.score = 0; return s;
 }
-function put(s, i, col, tier) {
-  s.cells[i] = { id: ++s.seq, collection: col, tier: tier, born: s.seq };
+function put(s, i, key, tier, top) {
+  s.cells[i] = { id: ++s.seq, key: key, tier: tier, top: top || 3, born: s.seq };
   return s.cells[i];
 }
 function evs(list, type) { return list.filter(function (e) { return e.type === type; }); }
-function blankPair(col, tier) {
-  var s = blank(); put(s, 0, col, tier); put(s, 1, col, tier); return s;
+function blankPair(key, tier, top) {
+  var s = blank(); put(s, 0, key, tier, top); put(s, 1, key, tier, top); return s;
 }
 
 /* --- construction ------------------------------------------------------- */
-var s = R.createState(42);
+var s = fresh(42);
 eq('createState fills the tray with START_PIECES', R.CELLS - R.emptyCells(s).length, 10);
 ok('every starting piece is tier 1', s.cells.every(function (p) { return !p || p.tier === 1; }));
 eq('createState starts at zero score', s.score, 0);
+eq('the tray holds exactly three sets', s.tray.length, 3);
+eq('the rest of the sets wait in the queue', s.queue.length, 1);
+eq('nothing is done yet', s.done.length, 0);
+ok('the opening hand only deals sets on the tray',
+   s.cells.every(function (p) {
+     return !p || s.tray.some(function (d) { return d.key === p.key; });
+   }));
+ok('every piece carries its own tier cap',
+   s.cells.every(function (p) { return !p || p.top === 3 || p.top === 4; }));
 
-var a1 = R.createState(7), a2 = R.createState(7), a3 = R.createState(8);
+var threw = false;
+try { R.createState(1, { sets: fixture().slice(0, 2) }); } catch (err) { threw = true; }
+ok('createState refuses fewer than three sets', threw);
+
+var a1 = fresh(7), a2 = fresh(7), a3 = fresh(8);
 eq('same seed replays the same tray', JSON.stringify(a1.cells), JSON.stringify(a2.cells));
 ok('a different seed gives a different tray', JSON.stringify(a1.cells) !== JSON.stringify(a3.cells));
 
 /* --- canMerge ------------------------------------------------------------ */
-var A = { collection: 'cassiopea', tier: 1 }, B = { collection: 'cassiopea', tier: 1 };
+var A = { key: 'aa/s', tier: 1, top: 3 }, B = { key: 'aa/s', tier: 1, top: 3 };
 ok('twins merge', R.canMerge(A, B));
-ok('different collections do not merge', !R.canMerge(A, { collection: 'marchesa', tier: 1 }));
-ok('different tiers do not merge', !R.canMerge(A, { collection: 'cassiopea', tier: 2 }));
+ok('different sets do not merge', !R.canMerge(A, { key: 'bb/s', tier: 1, top: 3 }));
+ok('two sets of the same collection do not merge',
+   !R.canMerge({ key: 'aa/s1', tier: 1, top: 3 }, { key: 'aa/s2', tier: 1, top: 3 }));
+ok('different tiers do not merge', !R.canMerge(A, { key: 'aa/s', tier: 2, top: 3 }));
 ok('top tier cannot merge further',
-   !R.canMerge({ collection: 'cassiopea', tier: 3 }, { collection: 'cassiopea', tier: 3 }));
+   !R.canMerge({ key: 'aa/s', tier: 3, top: 3 }, { key: 'aa/s', tier: 3, top: 3 }));
+ok('a four-tier set still merges at tier 3',
+   R.canMerge({ key: 'dd/s', tier: 3, top: 4 }, { key: 'dd/s', tier: 3, top: 4 }));
 ok('a piece cannot merge with itself', !R.canMerge(A, A));
 ok('null never merges', !R.canMerge(A, null) && !R.canMerge(null, null));
 
+/* --- spawn draws only from the tray -------------------------------------- */
+s = fresh(3);
+var spawned = R.spawn(s);
+ok('a spawn belongs to a set on the tray',
+   !spawned.length || s.tray.some(function (d) { return d.key === spawned[0].piece.key; }));
+eq('a forced spawn honours the key', R.spawn(blank(), 0, 'bb/s')[0].piece.key, 'bb/s');
+eq('a forced spawn carries that set tier cap',
+   R.spawn(blank(), 0, 'dd/s')[0].piece.top, 4);
+
+s = blank();
+put(s, 0, 'aa/s', 1); put(s, 1, 'aa/s', 1); put(s, 2, 'bb/s', 1);
+eq('a set with an odd number of tier-1s wants a partner',
+   R.setsWantingPartner(s).join(','), 'bb/s');
+
 /* --- classify ------------------------------------------------------------ */
-s = blank(); put(s, 0, 'cassiopea', 1); put(s, 1, 'cassiopea', 1); put(s, 2, 'marchesa', 1);
+s = blank(); put(s, 0, 'aa/s', 1); put(s, 1, 'aa/s', 1); put(s, 2, 'bb/s', 1);
 eq('drag onto an empty cell is a move', R.classify(s, 0, 5), 'move');
 eq('drag onto a twin is a merge', R.classify(s, 0, 1), 'merge');
 eq('drag onto a stranger is illegal', R.classify(s, 0, 2), null);
@@ -62,13 +107,13 @@ eq('a NaN source is illegal', R.classify(s, NaN, 0), null);
 eq('an undefined target is illegal', R.classify(s, 0, undefined), null);
 eq('a fractional target is illegal', R.classify(s, 0, 2.5), null);
 
-var keep = blank(); var survivor = put(keep, 0, 'cassiopea', 1);
+var keep = blank(); var survivor = put(keep, 0, 'aa/s', 1);
 var nanEvents = R.apply(keep, 0, NaN);
 eq('a NaN drop emits no events', nanEvents.length, 0);
 eq('a NaN drop does not destroy the piece', keep.cells[0], survivor);
 
 /* --- move ---------------------------------------------------------------- */
-s = blank(); var p = put(s, 0, 'cassiopea', 1);
+s = blank(); var p = put(s, 0, 'aa/s', 1);
 var e = R.apply(s, 0, 5);
 eq('a move relocates the piece', s.cells[5], p);
 eq('a move empties the source', s.cells[0], null);
@@ -77,38 +122,113 @@ eq('a move emits one event', e.length, 1);
 eq('a move spawns nothing', evs(e, 'spawn').length, 0);
 
 /* --- merge to tier 2 ----------------------------------------------------- */
-s = blank(); put(s, 0, 'cassiopea', 1); put(s, 1, 'cassiopea', 1);
+s = blank(); put(s, 0, 'aa/s', 1); put(s, 1, 'aa/s', 1);
 e = R.apply(s, 0, 1);
 eq('two tier-1s make a tier-2', s.cells[1].tier, 2);
-eq('the tier-2 keeps the collection', s.cells[1].collection, 'cassiopea');
-eq('an intermediate merge is only a step, not a score', s.score, 0);
+eq('the tier-2 keeps the set key', s.cells[1].key, 'aa/s');
+eq('a merge to tier 2 scores one, same as any merge', s.score, 1);
 eq('a merge emits a merge event', evs(e, 'merge').length, 1);
 eq('a merge refills the tray', evs(e, 'spawn').length, 1);
 
 /* --- merge to tier 3: scores and dissolves -------------------------------- */
-s = blank(); put(s, 0, 'marchesa', 2); put(s, 1, 'marchesa', 2);
+s = blank(); put(s, 0, 'bb/s', 2); put(s, 1, 'bb/s', 2);
 e = R.apply(s, 0, 1);
-eq('a finished piece scores five', s.score, 5);
-eq('a finished piece fills exactly one piercing', R.TARGET / R.EAR_SLOTS, 5);
-eq('seven finished pieces reach the target', 7 * R.SCORING.birthday[3], R.TARGET);
+eq('a finished piece scores one', s.score, 1);
 eq('a tier-3 emits a score event', evs(e, 'score').length, 1);
 eq('the score event carries the crown', evs(e, 'score')[0].piece.tier, 3);
 ok('no tier-3 is left on the tray', s.cells.every(function (c) { return !c || c.tier < 3; }));
 
+/* --- a four-tier set does not finish early --------------------------------
+   The merged piece's cap must come from the merging piece (top: a.top), not a
+   hardcoded 3. Every other merge assertion here uses a three-tier set, where
+   top defaults to 3 anyway, so this is the only test that would catch a
+   regression back to a literal 3. */
+s = blank();
+put(s, 0, 'dd/s', 2, 4); put(s, 1, 'dd/s', 2, 4);
+e = R.apply(s, 0, 1);
+eq('a tier-3 piece of a four-tier set does not score out', evs(e, 'score').length, 0);
+eq('a four-tier merge keeps its cap', s.cells[1].top, 4);
+eq('a four-tier set reaches tier 3 without finishing', s.cells[1].tier, 3);
+
 /* --- a full chain: three merges, one finished piece ----------------------- */
 s = blank();
-put(s, 0, 'farfalla', 1); put(s, 1, 'farfalla', 1);
-put(s, 2, 'farfalla', 1); put(s, 3, 'farfalla', 1);
+put(s, 0, 'cc/s', 1); put(s, 1, 'cc/s', 1);
+put(s, 2, 'cc/s', 1); put(s, 3, 'cc/s', 1);
 R.apply(s, 0, 1);
 R.apply(s, 2, 3);
 R.apply(s, 1, 3);
-eq('a full chain is three merges and five points', s.score, 5);
-eq('the target is one point per year', R.TARGET, 35);
+eq('a full chain is three merges and three points', s.score, 3);
 eq('a finished piece brings a bonus tier-1 with it',
-   evs(R.apply(blankPair('marchesa', 2), 0, 1), 'spawn').length, 2);
+   evs(R.apply(blankPair('bb/s', 2), 0, 1), 'spawn').length, 2);
+
+/* --- finishing a set ------------------------------------------------------ */
+function finishOne(s, key, top) {
+  /* One finished piece: put two top-1 pieces down and merge them. */
+  var t = (top || 3) - 1;
+  put(s, 0, key, t, top || 3); put(s, 1, key, t, top || 3);
+  return R.apply(s, 0, 1);
+}
+
+s = blank();
+var ev = finishOne(s, 'aa/s');
+eq('a finished piece is counted against its set', s.finished['aa/s'], 1);
+eq('one finished piece does not retire the set', s.done.length, 0);
+eq('no setComplete event yet', evs(ev, 'setComplete').length, 0);
+
+s = blank();
+s.finished['aa/s'] = R.PIECES_PER_SET - 1;
+put(s, 10, 'aa/s', 1);  // a straggler retirement must sweep off the tray too
+ev = finishOne(s, 'aa/s');
+eq('the threshold retires the set', s.done[0], 'aa/s');
+eq('a retirement emits setComplete', evs(ev, 'setComplete').length, 1);
+eq('setComplete names the set', evs(ev, 'setComplete')[0].key, 'aa/s');
+eq('the tray is still three sets after a retirement', s.tray.length, 3);
+ok('the retired set is off the tray',
+   !s.tray.some(function (d) { return d.key === 'aa/s'; }));
+ok('the incoming set came from the queue',
+   s.tray.some(function (d) { return d.key === 'dd/s'; }));
+eq('the incoming set starts uncounted', s.finished['dd/s'], 0);
+
+var types = ev.map(function (x) { return x.type; });
+ok('the refill spawns land before the retirement',
+   types.indexOf('spawn') < types.indexOf('setComplete'));
+ok('setComplete precedes the dissolves',
+   types.indexOf('setComplete') < types.indexOf('dissolve'));
+
+/* --- retirement clears the retired chain off the tray --------------------- */
+s = blank();
+put(s, 5, 'aa/s', 1); put(s, 6, 'aa/s', 2); put(s, 7, 'bb/s', 1);
+ev = R.retire(s, 'aa/s');
+ok('no piece of a retired set survives on the tray',
+   s.cells.every(function (p) { return !p || p.key !== 'aa/s'; }));
+ok('other sets are untouched', s.cells[7] && s.cells[7].key === 'bb/s');
+eq('retirement dissolves what it removed', evs(ev, 'dissolve').length, 2);
+ok('the incoming set seeds the freed cells', evs(ev, 'spawn').length >= 1);
+ok('the seeded pieces belong to the incoming set',
+   evs(ev, 'spawn').every(function (x) {
+     return s.tray.some(function (d) { return d.key === x.piece.key; });
+   }));
+eq('setComplete comes before the dissolves', ev[0].type, 'setComplete');
+
+/* --- endless never runs dry ----------------------------------------------- */
+s = R.createState(5, { sets: fixture(), mode: 'endless' });
+s.queue = [];
+var trayBefore = s.tray.map(function (d) { return d.key; });
+R.retire(s, trayBefore[0]);
+eq('endless refills the queue rather than shrinking the tray', s.tray.length, 3);
+ok('the refill never re-deals a set already on the tray',
+   s.tray.map(function (d) { return d.key; })
+     .filter(function (k, i, a) { return a.indexOf(k) !== i; }).length === 0);
+
+/* --- demo stops rather than recycling -------------------------------------- */
+s = R.createState(5, { sets: fixture(), mode: 'demo' });
+s.queue = [];
+var demoTray = s.tray.map(function (d) { return d.key; });
+R.retire(s, demoTray[0]);
+eq('demo lets the tray shrink when the queue is empty', s.tray.length, 2);
 
 /* --- illegal moves are inert --------------------------------------------- */
-s = blank(); put(s, 0, 'cassiopea', 1); put(s, 2, 'marchesa', 1);
+s = blank(); put(s, 0, 'aa/s', 1); put(s, 2, 'bb/s', 1);
 var before = JSON.stringify(s.cells);
 e = R.apply(s, 0, 2);
 eq('an illegal drag returns no events', e.length, 0);
@@ -116,55 +236,250 @@ eq('an illegal drag does not touch the tray', JSON.stringify(s.cells), before);
 eq('an illegal drag does not score', s.score, 0);
 
 /* --- deadlock ------------------------------------------------------------ */
-s = blank(); put(s, 0, 'cassiopea', 1);
+s = blank(); put(s, 0, 'aa/s', 1);
 ok('an empty cell always means a legal move exists', R.hasLegalMove(s));
 
 s = blank();
-for (var i = 0; i < R.CELLS; i++) put(s, i, R.COLLECTIONS[i % 3], (i % 2) + 1);
+for (var i = 0; i < R.CELLS; i++) put(s, i, fixture()[i % 3].key, (i % 2) + 1);
 ok('a full tray with a twin still has a move', R.hasLegalMove(s));
 
 var jam = blank();
-for (i = 0; i < R.CELLS; i++) put(jam, i, 'cassiopea', 3);
+for (i = 0; i < R.CELLS; i++) put(jam, i, 'aa/s', 3);
 ok('a tray of un-mergeable crowns is jammed', !R.hasLegalMove(jam));
 
-/* --- relieve: birthday mode cannot be lost -------------------------------- */
+/* --- relieve: the tray can never dead-end ---------------------------------- */
 s = blank();
-var first = put(s, 3, 'cassiopea', 1);
-put(s, 4, 'marchesa', 1); put(s, 5, 'farfalla', 1);
+var first = put(s, 3, 'aa/s', 1);
+put(s, 4, 'bb/s', 1); put(s, 5, 'cc/s', 1);
 e = R.relieve(s);
 eq('relieve dissolves the oldest tier-1', s.cells[3], null);
 eq('relieve reports what it dissolved', e[0].piece.id, first.id);
 eq('relieve frees exactly one cell', R.emptyCells(s).length, R.CELLS - 2);
 
-s = blank(); put(s, 0, 'cassiopea', 2);
+s = blank(); put(s, 0, 'aa/s', 2);
 eq('relieve never touches a tier-2', R.relieve(s).length, 0);
 
-/* --- ear meter ------------------------------------------------------------ */
-s = blank();
-eq('the ear starts empty', R.earFilled(s), 0);
-s.score = 5;  eq('5 points fills one piercing', R.earFilled(s), 1);
-s.score = 34; eq('34 points leaves the last one empty', R.earFilled(s), 6);
-s.score = 35; eq('35 points fills the ear', R.earFilled(s), R.EAR_SLOTS);
-s.score = 99; eq('the ear cannot overfill', R.earFilled(s), R.EAR_SLOTS);
+/* The case that only exists now that sets retire mid-game: a tray full of
+   pieces belonging to sets that have LEFT. Nothing can merge, nothing spawns
+   into them, and endless has no end state to fall through to. */
+/* Each cell gets a DIFFERENT gone key: identical keys would just merge each
+   other, same as any live pair, and prove nothing about stranding. */
+var stranded = blank();
+for (i = 0; i < R.CELLS; i++) put(stranded, i, 'zz/gone' + i, 1);
+ok('a tray of stranded tier-1s is jammed', !R.hasLegalMove(stranded));
+ok('relieve still frees a cell there', R.relieve(stranded).length === 1);
+ok('a legal move exists once relieve has run', R.hasLegalMove(stranded));
 
-/* --- completion ----------------------------------------------------------- */
-s = blank(); s.score = 34; ok('34 points is not the birthday yet', !R.isComplete(s));
-s.score = 35; ok('35 points IS the birthday', R.isComplete(s));
-s.endless = true; ok('endless mode never completes', !R.isComplete(s));
+/* This -- not the loop below -- is the actual reason the tray cannot dead-end
+   in normal play. spawn() only ever draws a key from state.tray (three keys,
+   TRAY_SETS) and only ever produces a tier-1 piece, so a board filled by
+   spawning alone can hold at most three distinct (key, tier) classes.
+   Twenty-five pieces sorted into three classes cannot avoid some class
+   holding two or more (pigeonhole), and any two pieces in the same class are
+   a mergeable pair by definition -- canMerge only checks key, tier and
+   tier < top, and every fixture descriptor here has top >= 3 at tier 1. So a
+   full board with no legal move is unreachable through spawn alone; building
+   one at all takes a hand-constructed state, like the stranded tray above. */
+var full = blank();
+while (R.emptyCells(full).length) R.spawn(full);
+var classes = {};
+for (i = 0; i < R.CELLS; i++) {
+  var fp = full.cells[i];
+  classes[fp.key + '/' + fp.tier] = true;
+}
+eq('spawning alone fills the board', R.emptyCells(full).length, 0);
+ok('a board filled by spawn alone holds at most three (key, tier) classes',
+   Object.keys(classes).length <= 3);
+ok('a full board built by spawn alone still has a legal move', R.hasLegalMove(full));
 
-/* --- endless scores differently ------------------------------------------- */
-var bd = blank(); put(bd, 0, 'cassiopea', 1); put(bd, 1, 'cassiopea', 1);
-R.apply(bd, 0, 1);
-eq('birthday mode ignores an intermediate merge', bd.score, 0);
+/* Sustained play: 2000 turns of greedy merge-or-refill. Occupancy here is
+   conserved at exactly START_PIECES all game -- every merge frees a cell a
+   spawn immediately refills, every retirement reseeds exactly the cells it
+   dissolved -- so the tray is never full and the jam branch below never
+   actually fires in this drive pattern; that is not this loop's proof (the
+   pigeonhole assertion above is that proof). What this loop legitimately
+   demonstrates: sustained play never trips the guard, retirements keep
+   happening under real churn, and the tray is rebuilt to exactly three sets
+   every time one retires -- that last one would catch broken queue
+   recycling. */
+var loop = R.createState(11, { sets: fixture(), mode: 'endless' });
+var guard = 0, stuck = false, retireCount = 0;
+while (guard++ < 2000) {
+  if (!R.hasLegalMove(loop)) {
+    if (!R.relieve(loop).length && !R.emptyCells(loop).length) { stuck = true; break; }
+  }
+  var moves = [];
+  for (i = 0; i < R.CELLS; i++) {
+    for (var j = 0; j < R.CELLS; j++) {
+      if (i !== j && R.classify(loop, i, j) === 'merge') moves.push([i, j]);
+    }
+  }
+  if (moves.length) {
+    retireCount += evs(R.apply(loop, moves[0][0], moves[0][1]), 'setComplete').length;
+  }
+  else if (R.emptyCells(loop).length) R.spawn(loop);
+}
+ok('2000 turns of sustained play never trip the relieve/no-move-empty guard', !stuck);
+ok('the tray is rebuilt to three sets through many retirements', loop.tray.length === 3);
+ok('retirements actually happened during the sustained-play drive', retireCount > 0);
 
-var en = blank(); en.endless = true; put(en, 0, 'cassiopea', 1); put(en, 1, 'cassiopea', 1);
-R.apply(en, 0, 1);
-eq('endless mode counts every merge', en.score, 1);
+/* --- scoring: flat, every merge counts ------------------------------------ */
+s = blank(); put(s, 0, 'aa/s', 1); put(s, 1, 'aa/s', 1);
+R.apply(s, 0, 1);
+eq('an intermediate merge scores one', s.score, 1);
+
+s = blank(); put(s, 0, 'aa/s', 2); put(s, 1, 'aa/s', 2);
+R.apply(s, 0, 1);
+eq('a finished piece also scores one', s.score, 1);
+eq('there is no target to land on', R.TARGET, undefined);
+eq('the ear meter is gone', R.earFilled, undefined);
+
+/* --- completion ------------------------------------------------------------ */
+var e1 = R.createState(1, { sets: fixture(), mode: 'endless' });
+e1.score = 9999;
+ok('endless never completes, whatever the score', !R.isComplete(e1));
+
+var d1 = R.createState(1, { sets: fixture(), mode: 'demo' });
+ok('demo does not complete while sets remain', !R.isComplete(d1));
+eq('demo remembers the three it opened with', d1.opening.length, 3);
+d1.done = d1.opening.slice();
+ok('demo completes when its opening three are done', R.isComplete(d1));
+
+var d2 = R.createState(1, { sets: fixture(), mode: 'demo' });
+d2.done = [d2.opening[0], d2.opening[1]];
+ok('demo does not complete on two of three', !R.isComplete(d2));
 
 /* --- spawn capacity -------------------------------------------------------- */
 s = blank();
-for (i = 0; i < R.CELLS; i++) put(s, i, 'cassiopea', 1);
+for (i = 0; i < R.CELLS; i++) put(s, i, 'aa/s', 1);
 eq('spawn is a no-op on a full tray', R.spawn(s).length, 0);
+
+/* Demo's last set can retire with nothing left to replace it, leaving the
+   tray empty -- newly reachable now that sets retire mid-game. */
+s = blank(); s.tray = [];
+eq('spawn is a no-op on an empty tray', R.spawn(s).length, 0);
+
+/* --- manifest ------------------------------------------------------------- */
+var M = Manifest;
+var FIX = [
+  { id: 'aa', accent: '#ff0000', sets: [ { id: 's1', tiers: 3 }, { id: 's2', tiers: 4 } ] },
+  { id: 'bb', accent: '#00ff00', sets: [ { id: 's1', tiers: 3 } ] },
+  { id: 'cc', accent: '#0000ff', sets: [ { id: 's1', tiers: 3 } ] }
+];
+
+eq('sets flattens every set', M.sets(FIX).length, 4);
+eq('a descriptor key is collection/set', M.sets(FIX)[0].key, 'aa/s1');
+eq('a descriptor carries its tier cap', M.sets(FIX)[1].tiers, 4);
+eq('a descriptor defaults to three tiers',
+   M.sets([{ id: 'z', accent: '#000', sets: [{ id: 's' }] }])[0].tiers, 3);
+
+var order = M.endlessOrder(FIX, function () { return 0.5; });
+eq('endless order covers every set', order.length, 4);
+var firstThree = order.slice(0, 3).map(function (d) { return d.collection; });
+eq('the opening three are three different collections',
+   firstThree.slice().sort().join(','), 'aa,bb,cc');
+
+var demo = M.demoOrder(FIX, 'aa', function () { return 0.5; });
+eq('demo deals the featured collection first', demo[0].collection, 'aa');
+eq('demo deals every featured set before any filler', demo[1].collection, 'aa');
+ok('demo fills the third slot from elsewhere', demo[2].collection !== 'aa');
+eq('demo still offers every set', demo.length, 4);
+
+eq('hue of red is 0', Math.round(M.hue('#ff0000')), 0);
+eq('hue of green is 120', Math.round(M.hue('#00ff00')), 120);
+eq('hue of blue is 240', Math.round(M.hue('#0000ff')), 240);
+
+eq('find resolves a key to its pair', M.find(FIX, 'aa/s2').set.id, 's2');
+eq('find resolves the collection too', M.find(FIX, 'aa/s2').collection.id, 'aa');
+eq('find returns null for an unknown key', M.find(FIX, 'nope/nope'), null);
+
+/* The real manifest must satisfy the same invariants the fixtures do. */
+var real = M.sets(Collections);
+ok('the real manifest has at least three sets', real.length >= 3);
+ok('every real set declares three or four tiers',
+   real.every(function (d) { return d.tiers === 3 || d.tiers === 4; }));
+ok('every real set key is unique',
+   real.map(function (d) { return d.key; })
+       .filter(function (k, i, a) { return a.indexOf(k) !== i; }).length === 0);
+ok('every real collection has an accent and a url',
+   Collections.every(function (c) { return !!c.accent && !!c.url; }));
+
+/* --- leaderboard ---------------------------------------------------------- */
+function fakeStore() {
+  var mem = {};
+  return {
+    getItem: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+    setItem: function (k, v) { mem[k] = String(v); },
+    _mem: mem
+  };
+}
+var store = fakeStore(), day = '2026-09-03';
+Board.attach(store, function () { return day; });
+
+eq('a fresh board is empty', Board.rows().length, 0);
+ok('any score qualifies for an empty board', Board.qualifies(1));
+
+Board.add('АБВ', 40);
+eq('a score lands on the board', Board.rows().length, 1);
+eq('the board keeps the initials', Board.rows()[0].initials, 'АБВ');
+
+Board.add('ГДЕ', 90);
+eq('the board sorts by score, highest first', Board.rows()[0].score, 90);
+
+for (var b = 0; b < 12; b++) Board.add('X' + b, 100 + b);
+eq('the board holds ten rows at most', Board.rows().length, 10);
+eq('the top row is the highest score', Board.rows()[0].score, 111);
+ok('a score below the tenth does not qualify', !Board.qualifies(1));
+
+eq('initials are cut to three characters', Board.add('ABCDEF', 500)[0].initials, 'ABC');
+eq('initials are upper-cased', Board.add('xyz', 600)[0].initials, 'XYZ');
+
+day = '2026-09-04';
+eq('the board resets when the date changes', Board.rows().length, 0);
+ok('any score qualifies again the next day', Board.qualifies(1));
+
+/* --- malformed stored shapes (Finding 2 safety) ----------------------------- */
+/* Pre-seed store with today's date but malformed rows shapes. */
+var testCases = [
+  { rows: {} },
+  { rows: 'not an array' },
+  { rows: 123 },
+  { rows: null },
+  { rows: true }
+];
+testCases.forEach(function (shape, i) {
+  var store3 = fakeStore();
+  var day3 = '2026-09-06';
+  store3.setItem('auris.board.v1', JSON.stringify({ date: day3, rows: shape.rows }));
+  Board.attach(store3, function () { return day3; });
+  eq('rows() handles malformed rows #' + i, Board.rows().length, 0);
+  ok('add() does not throw on malformed rows #' + i, function() {
+    try { Board.add('XYZ', 100); return true; } catch (e) { return false; }
+  }());
+});
+
+/* Non-JSON stored values are caught by JSON.parse and return empty board. */
+var store4 = fakeStore(), day4 = '2026-09-07';
+store4._mem['auris.board.v1'] = 'not valid json at all';
+Board.attach(store4, function () { return day4; });
+eq('rows() handles non-JSON stored value', Board.rows().length, 0);
+
+/* Bare JSON values (whole stored value is not an object) must degrade safely. */
+var store5 = fakeStore(), day5 = '2026-09-08';
+store5._mem['auris.board.v1'] = 'null';
+Board.attach(store5, function () { return day5; });
+eq('rows() handles stored bare null', Board.rows().length, 0);
+ok('add() does not throw on stored bare null', function() {
+  try { Board.add('АБВ', 50); return true; } catch (e) { return false; }
+}());
+
+var store6 = fakeStore(), day6 = '2026-09-09';
+store6._mem['auris.board.v1'] = '42';
+Board.attach(store6, function () { return day6; });
+eq('rows() handles stored bare number', Board.rows().length, 0);
+ok('add() does not throw on stored bare number', function() {
+  try { Board.add('ХУЙ', 75); return true; } catch (e) { return false; }
+}());
 
 document.getElementById('out').textContent =
   lines.join('\n') + '\n\nRESULT ' + pass + '/' + (pass + fail) +

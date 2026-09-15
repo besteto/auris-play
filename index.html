@@ -10,7 +10,7 @@
      the domain root, i.e. <user>.github.io/robots.txt), so this meta tag is the
      part that actually works. -->
 <meta name="robots" content="noindex, nofollow, noarchive, noimageindex">
-<title>AURIS · Birthday Edition</title>
+<title>AURIS · Play</title>
 <link rel="icon" href="assets/logo/mark-gold.png">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -20,13 +20,15 @@
 <section id="screen-title" class="screen is-on">
   <div class="title-inner">
     <img class="title-logo" src="assets/logo/auris-stack-light.png" alt="AURIS">
-    <p class="title-edition">Birthday&nbsp;Edition</p>
+    <p class="title-edition" data-i18n="title.edition">Studio&nbsp;Edition</p>
     <div class="title-rule"></div>
     <nav class="title-menu">
-      <button class="btn btn-gold" data-act="play-birthday">Играть</button>
-      <button class="btn" data-act="play-endless">Бесконечный режим</button>
-      <button class="btn" data-act="collections">Коллекции</button>
-      <button class="btn btn-quiet" data-act="manual">Как играть</button>
+      <button class="btn btn-gold" data-act="play-endless" data-i18n="btn.play">Играть</button>
+      <button class="btn" data-act="play-demo" data-i18n="btn.demo">Коллекция</button>
+      <button class="btn" data-act="collections" data-i18n="btn.collections">Коллекции</button>
+      <button class="btn btn-quiet" data-act="board" data-i18n="btn.board">Рекорды</button>
+      <button class="btn btn-quiet" data-act="manual" data-i18n="btn.manual">Как играть</button>
+      <button class="lang-toggle" data-act="lang">RU / EN</button>
     </nav>
   </div>
 </section>
@@ -34,25 +36,18 @@
 <!-- ══ GAME ═══════════════════════════════════════════════════════════════ -->
 <section id="screen-game" class="screen">
   <header class="hud">
-    <button class="icon-btn" data-act="home" aria-label="В меню">‹</button>
+    <button class="icon-btn" data-act="home" data-i18n-aria="aria.menu" aria-label="В меню">‹</button>
 
     <div class="hud-score">
-      <span id="score">0</span><span class="hud-target" id="score-target">&thinsp;/&thinsp;35</span>
+      <span id="score">0</span>
     </div>
 
-    <button class="icon-btn" data-act="mute" aria-label="Звук"><span id="mute-glyph">♪</span></button>
+    <button class="icon-btn" data-act="mute" data-i18n-aria="aria.sound" aria-label="Звук"><span id="mute-glyph">♪</span></button>
+    <button class="btn btn-stop" data-act="stop" data-i18n="btn.stop">Стоп</button>
   </header>
 
-  <!-- progress meter: the ear fills as he scores -->
-  <div class="ear-wrap" id="ear-wrap">
-    <svg class="ear" viewBox="0 0 100 140" aria-hidden="true">
-      <path class="ear-outline" d="M64 14 C40 10 22 26 21 52 C20 78 26 102 38 118
-                                    C47 130 62 132 66 121 C69 111 59 107 54 100 C50 94 51 88 57 85"/>
-      <path class="ear-inner" d="M56 36 C40 42 34 60 38 79 C41 93 48 101 53 105"/>
-      <g id="ear-dots"></g>
-    </svg>
-    <p class="ear-caption" id="ear-caption">коллекция собирается</p>
-  </div>
+  <!-- set progress pips -->
+  <div class="set-pips" id="set-pips"></div>
 
   <div class="tray-frame">
     <div class="tray" id="tray"></div>
@@ -61,45 +56,98 @@
   <footer class="game-foot">
     <button class="pouch" data-act="pouch">
       <img src="assets/logo/mark-gold.png" alt="">
-      <span>добавить на витрину</span>
+      <span data-i18n="pouch"></span>
     </button>
   </footer>
 
   <div class="toast" id="toast" hidden></div>
 </section>
 
-<!-- ══ PAYOFF ═════════════════════════════════════════════════════════════ -->
-<section id="screen-payoff" class="screen">
-  <article class="plate catalogue" id="catalogue">
+<!-- ══ SET PLATE (overlay) ════════════════════════════════════════════════ -->
+<div id="set-plate" class="overlay" hidden>
+  <article class="plate catalogue">
     <img class="plate-mark" src="assets/logo/mark-dark.png" alt="AURIS">
-    <p class="plate-eyebrow">VLAD IS LOVE · Birthday edition</p>
-
-    <figure class="cat-portrait">
-      <img src="assets/portrait/vlad.jpg" alt="Влад Бодмодов">
-    </figure>
-
-    <h1 class="cat-title">Коллекция<br><em>«Влад Бодмодов»</em></h1>
-    <p class="cat-ref">REF.&nbsp;35</p>
-
+    <p class="plate-eyebrow" id="set-plate-eyebrow"></p>
+    <figure class="cat-shot"><img id="set-plate-shot" src="" alt=""></figure>
+    <h1 class="cat-title" id="set-plate-title"></h1>
+    <p class="cat-ref" id="set-plate-ref"></p>
     <div class="cat-rule"></div>
+    <p class="cat-body" id="set-plate-body"></p>
+    <dl class="cat-specs" id="set-plate-specs"></dl>
+  </article>
+</div>
 
-    <p class="cat-body">
-      Изысканный силуэт, созданный по индивидуальному заказу.
-      Неповторим&nbsp;— другого такого нет.
-      Самый лучший и запоминающийся навсегда.
-    </p>
-
+<!-- ══ COLLECTION PLATE — the demo ending ═════════════════════════════════ -->
+<section id="screen-collection-plate" class="screen">
+  <article class="plate catalogue">
+    <img class="plate-mark" src="assets/logo/mark-dark.png" alt="AURIS">
+    <p class="plate-eyebrow" data-i18n="plate.eyebrow">Auris</p>
+    <figure class="cat-shot"><img id="coll-plate-hero" src="" alt=""></figure>
+    <h1 class="cat-title" id="coll-plate-title"></h1>
     <div class="cat-rule"></div>
-    <dl class="cat-specs">
-      <div><dt>тираж</dt><dd>1&nbsp;экз.</dd></div>
-      <div><dt>материал</dt><dd>любовь</dd></div>
-      <div class="cat-credit"><dt>голос</dt><dd>любящая сестра Алёнушка</dd></div>
-    </dl>
-
+    <p class="cat-body" id="coll-plate-body"></p>
     <nav class="cat-menu">
-      <button class="btn btn-gold" data-act="play-endless">Ещё раз</button>
-      <button class="btn btn-quiet" data-act="collections">Коллекции</button>
-      <button class="btn btn-quiet" data-act="home">В меню</button>
+      <button class="btn btn-gold" data-act="demo-again" data-i18n="btn.again">Ещё раз</button>
+      <button class="btn" data-act="contacts" data-i18n="btn.contacts">Контакты</button>
+      <button class="btn btn-quiet" data-act="home" data-i18n="btn.menu">В меню</button>
+    </nav>
+  </article>
+</section>
+
+<!-- ══ INITIALS ═══════════════════════════════════════════════════════════ -->
+<section id="screen-initials" class="screen">
+  <article class="plate">
+    <p class="plate-eyebrow" data-i18n="initials.eyebrow">Ваш результат</p>
+    <h2 class="plate-title" data-i18n="initials.title">Три буквы</h2>
+    <p class="initials-score"><span id="initials-score">0</span></p>
+    <div class="initials-slots">
+      <button class="initials-slot is-on" data-slot="0">А</button>
+      <button class="initials-slot" data-slot="1">А</button>
+      <button class="initials-slot" data-slot="2">А</button>
+    </div>
+    <div class="initials-pad" id="initials-pad"></div>
+    <nav class="cat-menu">
+      <button class="btn btn-gold" data-act="initials-ok" data-i18n="btn.ok">Готово</button>
+      <button class="btn btn-quiet" data-act="board" data-i18n="btn.skip">Пропустить</button>
+    </nav>
+  </article>
+</section>
+
+<!-- ══ BOARD ══════════════════════════════════════════════════════════════ -->
+<section id="screen-board" class="screen">
+  <article class="plate">
+    <button class="plate-close" data-act="home" aria-label="×">×</button>
+    <p class="plate-eyebrow" data-i18n="board.eyebrow">Auris</p>
+    <h2 class="plate-title" data-i18n="board.title">Рекорды дня</h2>
+    <ol class="board-list" id="board-list"></ol>
+    <p class="board-note" data-i18n="board.note">Доска обнуляется каждый день.</p>
+    <nav class="cat-menu">
+      <button class="btn btn-gold" data-act="play-endless" data-i18n="btn.again">Ещё раз</button>
+      <button class="btn btn-quiet" data-act="home" data-i18n="btn.menu">В меню</button>
+    </nav>
+  </article>
+</section>
+
+<!-- ══ CONTACTS ═══════════════════════════════════════════════════════════ -->
+<section id="screen-contacts" class="screen">
+  <article class="plate">
+    <button class="plate-close" data-act="home" aria-label="×">×</button>
+    <p class="plate-eyebrow" data-i18n="contacts.eyebrow">Auris</p>
+    <h2 class="plate-title" data-i18n="contacts.title">Забрать с собой</h2>
+    <ul class="qr-list">
+      <li>
+        <img class="qr" id="qr-auris" src="assets/qr/auris.png" alt="">
+        <img class="qr-mark" src="assets/logo/auris-horiz-dark.png" alt="AURIS">
+        <span data-i18n="contacts.auris">украшения</span>
+      </li>
+      <li>
+        <img class="qr" src="assets/qr/scalpelburg.png" alt="">
+        <img class="qr-mark" src="assets/logo/scalpelburg.png" alt="Scalpelburg">
+        <span data-i18n="contacts.scalpelburg">студия пирсинга</span>
+      </li>
+    </ul>
+    <nav class="cat-menu">
+      <button class="btn btn-quiet" data-act="home" data-i18n="btn.menu">В меню</button>
     </nav>
   </article>
 </section>
@@ -107,36 +155,36 @@
 <!-- ══ COLLECTIONS ════════════════════════════════════════════════════════ -->
 <section id="screen-collections" class="screen">
   <article class="plate collections">
-    <button class="plate-close" data-act="home" aria-label="Закрыть">×</button>
+    <button class="plate-close" data-act="home" data-i18n-aria="aria.close" aria-label="Закрыть">×</button>
     <img class="plate-mark" src="assets/logo/mark-dark.png" alt="AURIS">
-    <p class="plate-eyebrow">Auris</p>
-    <h2 class="plate-title">Коллекции</h2>
+    <p class="plate-eyebrow" data-i18n="collections.eyebrow"></p>
+    <h2 class="plate-title" data-i18n="collections.title"></h2>
 
     <div id="collection-list"></div>
 
     <div class="cat-rule"></div>
 
     <section class="boutique">
-      <p class="boutique-head">Посмотреть вживую</p>
-      <img class="boutique-shot" src="assets/bg/studio.jpg" alt="Студия Scalpelburg">
+      <p class="boutique-head" data-i18n="collections.boutique"></p>
+      <img class="boutique-shot" src="assets/bg/studio.jpg" data-i18n-alt="alt.scalpelburg" alt="Студия Scalpelburg">
       <ul class="boutique-links">
         <li>
           <a class="boutique-link" href="https://scalpelburg.com/" target="_blank" rel="noopener">
             <img class="boutique-mark-scalpel" src="assets/logo/scalpelburg.png" alt="Scalpelburg">
-            <span>студия пирсинга</span>
+            <span data-i18n="collections.scalpelburg"></span>
           </a>
         </li>
         <li>
           <a class="boutique-link" href="https://aurisjewellery.com/" target="_blank" rel="noopener">
             <img class="boutique-mark-auris" src="assets/logo/auris-horiz-dark.png" alt="AURIS">
-            <span>украшения</span>
+            <span data-i18n="collections.auris"></span>
           </a>
         </li>
       </ul>
     </section>
 
     <nav class="cat-menu">
-      <button class="btn btn-quiet" data-act="home">В меню</button>
+      <button class="btn btn-quiet" data-act="home" data-i18n="btn.menu">В меню</button>
     </nav>
   </article>
 </section>
@@ -144,30 +192,30 @@
 <!-- ══ INSTRUCTION PLATE ══════════════════════════════════════════════════ -->
 <div id="manual" class="overlay" hidden>
   <article class="plate manual">
-    <button class="plate-close" data-act="close-manual" aria-label="Закрыть">×</button>
-    <p class="plate-eyebrow">AURIS · Birthday edition</p>
-    <h2 class="plate-title">Как пользоваться подарком</h2>
+    <button class="plate-close" data-act="close-manual" data-i18n-aria="aria.close" aria-label="Закрыть">×</button>
+    <p class="plate-eyebrow" data-i18n="manual.eyebrow"></p>
+    <h2 class="plate-title" data-i18n="manual.title"></h2>
 
     <ol class="steps">
-      <li><b>1.</b> Возьми украшение и перетащи его на такое&nbsp;же.</li>
-      <li><b>2.</b> Два одинаковых складываются в одно&nbsp;— крупнее.</li>
-      <li><b>3.</b> Складывать можно только внутри одной коллекции.</li>
-      <li><b>4.</b> Цвет ободка подсказывает коллекцию.</li>
-      <li><b>5.</b> Точки под украшением&nbsp;— его размер:
+      <li><b>1.</b> <span data-i18n="manual.1"></span></li>
+      <li><b>2.</b> <span data-i18n="manual.2"></span></li>
+      <li><b>3.</b> <span data-i18n="manual.3"></span></li>
+      <li><b>4.</b> <span data-i18n="manual.4"></span></li>
+      <li><b>5.</b> <span data-i18n="manual.5"></span>
         <span class="nowrap">•&ensp;••&ensp;•••</span></li>
-      <li><b>6.</b> Третий размер&nbsp;— украшение готово. Оно уходит в ухо.</li>
-      <li><b>7.</b> Не хватает деталей&nbsp;— добавь на витрину.</li>
-      <li><b>8.</b> Собери 35. Это ты.</li>
+      <li><b>6.</b> <span data-i18n="manual.6"></span></li>
+      <li><b>7.</b> <span data-i18n="manual.7"></span></li>
+      <li><b>8.</b> <span data-i18n="manual.8"></span></li>
     </ol>
-
-    <div class="steps-rule"></div>
-    <p class="step-nine"><b>9.</b> BABY, DON'T HURT ME<br>
-      <span>(стерильность обязательна)</span></p>
   </article>
 </div>
 
 <script src="src/rules.js"></script>
 <script src="src/sfx.js"></script>
+<script src="data/collections.js"></script>
+<script src="data/copy.js"></script>
+<script src="src/manifest.js"></script>
+<script src="src/board.js"></script>
 <script src="src/game.js"></script>
 </body>
 </html>

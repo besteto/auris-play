@@ -5,31 +5,21 @@
 
   var GRID = 5;
   var CELLS = GRID * GRID;
-  var MAX_TIER = 3;
-  var COLLECTIONS = ['cassiopea', 'marchesa', 'farfalla'];
+  var TRAY_SETS = 3;                 // measured; see the tuning note below
 
   /* ---- tuning knobs -------------------------------------------------------
-     Five points for a finished piece and nothing for the steps along the way, so
-     the target is seven finished pieces. That lines up with the ear exactly:
-     seven piercings, 35 / 7 = 5 points each, so ONE finished piece fills ONE
-     piercing. The meter and the score stop being two separate ideas.
+     Every merge counts one, so the score is a plain tally of pieces made. The
+     gift's weighted table existed to land exactly on 35 — his age — and there is
+     no target to land on any more.
 
-     Seven pieces is 21 merges, which smoke.html measures at around 28 seconds.
-     Two earlier models were both rejected by testing: scoring every merge ran to
-     47s and testers were flagging it as long by 26 points, and scoring only
-     finished pieces at 1 point each ran to a hopeless 105 drags.
-
-     Endless has no target to land on, so it keeps the flatter scoring, where the
-     number simply counts how many pieces you have made. */
-  var TARGET      = 35;
-  var SCORING     = {
-    birthday: { 2: 0, 3: 5 },        // 7 finished pieces, one per piercing
-    endless:  { 2: 1, 3: 1 }         // every merge counts
-  };
+     START_PIECES, SPAWN_BIAS and the partner bias are measured for exactly three
+     chains on a 25-cell tray. Do not change them without re-running tuning.html;
+     six chains at once starves pairs and every number here needs re-deriving. */
+  var SCORING      = { 2: 1, 3: 1, 4: 1 };
   var START_PIECES = 10;
-  var EAR_SLOTS   = 7;               // 35 / 7 = one filled piercing per 5 points
-  var SPAWN_BIAS  = 0.65;            // chance a spawn favours a collection already
-                                     // on the board, so chains stay completable
+  var SPAWN_BIAS   = 0.65;           // chance a spawn favours a set already on the
+                                     // board, so chains stay completable
+  var PIECES_PER_SET = 3;            // finished pieces that retire a set
 
   /* Deterministic RNG so tests are reproducible and a seed can replay a game. */
   function mulberry32(seed) {
@@ -43,22 +33,53 @@
     };
   }
 
-  function createState(seed) {
+  /* `opts.sets` is an ordered list of descriptors, {key, tiers}, built by
+     Manifest. The first three go on the tray, the rest queue behind them. Rules
+     never learn what a collection is; ordering is somebody else's decision. */
+  function createState(seed, opts) {
+    opts = opts || {};
+    var all = (opts.sets || []).slice();
+    if (all.length < TRAY_SETS) {
+      throw new Error('createState needs at least ' + TRAY_SETS + ' sets');
+    }
+
     var state = {
       cells: new Array(CELLS).fill(null),
       score: 0,
       seq: 0,          // piece id counter, also doubles as birth order
       rng: mulberry32(seed === undefined ? 1 : seed),
-      endless: false
+      mode: opts.mode === 'demo' ? 'demo' : 'endless',
+      all: all,
+      tray: all.slice(0, TRAY_SETS),
+      queue: all.slice(TRAY_SETS),
+      done: [],        // set of distinct retired keys, not a retirement count.
+                       // see retire() — a retired key is never added twice, so
+                       // anything counting retirements must tally setComplete events.
+      finished: {}
     };
-    /* Deal the opening hand round-robin rather than at random, so the first
-       thing he sees has all three collections on it. Left to chance, a tray
-       can open almost entirely one colour, which reads as a duller game than
-       it is. Positions are still random. */
+
+    /* Demo is over when the three sets it opened with are all finished. Captured
+       here because the tray changes underneath as sets retire. */
+    state.opening = state.tray.map(function (d) { return d.key; });
+
+    /* Deal the opening hand round-robin rather than at random, so the first tray
+       has all three sets on it. Left to chance, a tray can open almost entirely
+       one chain, which reads as a duller game than it is. Positions are still
+       random. */
     for (var i = 0; i < START_PIECES; i++) {
-      spawn(state, undefined, COLLECTIONS[i % COLLECTIONS.length]);
+      spawn(state, undefined, state.tray[i % state.tray.length].key);
     }
     return state;
+  }
+
+  function descriptorFor(state, key) {
+    for (var i = 0; i < state.tray.length; i++) {
+      if (state.tray[i].key === key) return state.tray[i];
+    }
+    for (var j = 0; j < state.all.length; j++) {
+      if (state.all[j].key === key) return state.all[j];
+    }
+    return null;
   }
 
   function emptyCells(state) {
@@ -67,48 +88,62 @@
     return out;
   }
 
-  /* Collections holding an ODD number of tier-1s, i.e. one piece sitting without
-     a partner. Biasing spawns toward these completes pairs the player can see.
+  /* Sets holding an ODD number of tier-1s, i.e. one piece sitting without a
+     partner. Biasing spawns toward these completes pairs the player can see.
 
-     The first attempt biased toward "any collection already on the tray", which
-     ran away: whichever collection got ahead kept being picked until the tray was
-     effectively one collection and the other two never appeared. */
-  function collectionsWantingPartner(state) {
+     The first attempt biased toward "any set already on the tray", which ran
+     away: whichever set got ahead kept being picked until the tray was
+     effectively one chain and the other two never appeared. */
+  function setsWantingPartner(state) {
     var count = {};
     for (var i = 0; i < CELLS; i++) {
       var p = state.cells[i];
-      if (p && p.tier === 1) count[p.collection] = (count[p.collection] || 0) + 1;
+      if (p && p.tier === 1) count[p.key] = (count[p.key] || 0) + 1;
     }
-    return COLLECTIONS.filter(function (c) { return (count[c] || 0) % 2 === 1; });
+    return state.tray
+      .map(function (d) { return d.key; })
+      .filter(function (k) { return (count[k] || 0) % 2 === 1; });
   }
 
-  function spawn(state, forceIndex, forceCollection) {
+  function spawn(state, forceIndex, forceKey) {
     var free = emptyCells(state);
     if (!free.length) return [];
+    /* Demo's last set can retire with nothing left to replace it, leaving the
+       tray empty. Without this guard, pool is [] and
+       pool[Math.floor(rng() * 0)] is undefined -- pieces spawn with
+       key: undefined, and two of them satisfy canMerge, since
+       undefined === undefined. */
+    if (!state.tray.length) return [];
 
     var idx = forceIndex !== undefined ? forceIndex
             : free[Math.floor(state.rng() * free.length)];
 
-    var pool = COLLECTIONS;
-    var wanting = collectionsWantingPartner(state);
+    var pool = state.tray.map(function (d) { return d.key; });
+    var wanting = setsWantingPartner(state);
     if (wanting.length && state.rng() < SPAWN_BIAS) pool = wanting;
-    var collection = forceCollection || pool[Math.floor(state.rng() * pool.length)];
+    var key = forceKey || pool[Math.floor(state.rng() * pool.length)];
 
-    var piece = { id: ++state.seq, collection: collection, tier: 1, born: state.seq };
+    var d = descriptorFor(state, key);
+    var piece = {
+      id: ++state.seq,
+      key: key,
+      tier: 1,
+      top: d ? d.tiers : 3,
+      born: state.seq
+    };
     state.cells[idx] = piece;
     return [{ type: 'spawn', index: idx, piece: piece }];
   }
 
   function pointsFor(state, tier) {
-    var table = state.endless ? SCORING.endless : SCORING.birthday;
-    return table[tier] || 0;
+    return SCORING[tier] || 0;
   }
 
   function canMerge(a, b) {
     return !!a && !!b && a !== b
-        && a.collection === b.collection
+        && a.key === b.key
         && a.tier === b.tier
-        && a.tier < MAX_TIER;
+        && a.tier < a.top;
   }
 
   /* A cell index must be a whole number on the tray. Testing the negation
@@ -144,8 +179,9 @@
 
     var merged = {
       id: ++state.seq,
-      collection: a.collection,
+      key: a.key,
       tier: a.tier + 1,
+      top: a.top,
       born: state.seq
     };
     state.cells[from] = null;
@@ -158,9 +194,10 @@
 
     /* A top-tier piece is the payoff: it scores, shows itself, then dissolves and
        flies to the ear. Keeping it on the board is what would clog the tray. */
-    if (merged.tier === MAX_TIER) {
+    if (merged.tier === merged.top) {
       state.cells[to] = null;
       events.push({ type: 'score', index: to, piece: merged, points: gained });
+      state.finished[merged.key] = (state.finished[merged.key] || 0) + 1;
     }
 
     events = events.concat(spawn(state));
@@ -168,7 +205,14 @@
     /* A finished piece costs four tier-1s but only three merges, so one extra
        tier-1 arrives with each crown. That keeps the tray stocked at a steady
        level without the player having to keep tapping the pouch. */
-    if (merged.tier === MAX_TIER) events = events.concat(spawn(state));
+    if (merged.tier === merged.top) events = events.concat(spawn(state));
+
+    /* Retire last, so the dissolve and seed events land after the refill and the
+       renderer plays them in the order they read. */
+    if (merged.tier === merged.top &&
+        state.finished[merged.key] >= PIECES_PER_SET) {
+      events = events.concat(retire(state, merged.key));
+    }
 
     return events;
   }
@@ -183,8 +227,66 @@
     return false;
   }
 
-  /* Birthday mode must not be losable. When the tray jams, the oldest tier-1
-     quietly dissolves rather than ending his own birthday. */
+  /* A set leaves the tray when PIECES_PER_SET of it have been finished. Its
+     leftovers go into the case with it rather than sitting on the tray as pieces
+     nobody can merge any more, and the incoming set seeds the cells they leave.
+     That is what makes the swap read as a reward instead of as bookkeeping. */
+  function retire(state, key) {
+    var slot = -1;
+    for (var i = 0; i < state.tray.length; i++) {
+      if (state.tray[i].key === key) { slot = i; break; }
+    }
+    if (slot < 0) return [];
+
+    var events = [{ type: 'setComplete', key: key, index: slot }];
+    state.tray.splice(slot, 1);
+    if (state.done.indexOf(key) < 0) state.done.push(key);
+
+    var freed = [];
+    for (var c = 0; c < CELLS; c++) {
+      var p = state.cells[c];
+      if (!p || p.key !== key) continue;
+      state.cells[c] = null;
+      freed.push(c);
+      events.push({ type: 'dissolve', index: c, piece: p, reason: 'retire' });
+    }
+
+    /* Endless means endless: when the queue runs out, everything not currently
+       on the tray goes back into it. Demo deliberately does not recycle — it is
+       supposed to end. */
+    if (!state.queue.length && state.mode === 'endless') {
+      var onTray = state.tray.map(function (d) { return d.key; });
+      state.queue = state.all.filter(function (d) { return onTray.indexOf(d.key) < 0; });
+    }
+
+    var incoming = state.queue.shift();
+    if (incoming) {
+      state.tray.splice(slot, 0, incoming);
+      state.finished[incoming.key] = 0;
+      for (var f = 0; f < freed.length; f++) {
+        events = events.concat(spawn(state, freed[f], incoming.key));
+      }
+    }
+    return events;
+  }
+
+  /* Unconditional. When the tray jams, the oldest tier-1 quietly dissolves.
+
+     What it actually guards against: a full tray (CELLS/CELLS) with no
+     mergeable pair anywhere on it. It is NOT guarding against pieces of a
+     retired set stranded on the board -- retire() sweeps every cell holding
+     its key the moment a set leaves, and spawn() only ever draws keys from
+     state.tray, so a stranded piece of that shape cannot exist here.
+
+     Under the current tuning that full-and-unmergeable state is actually
+     unreachable in play: spawn only ever produces tier-1 pieces from the
+     three tray keys, so a board filled by spawning alone holds at most three
+     (key, tier) classes, and twenty-five pieces in three classes always
+     pigeonhole a mergeable pair (see tests.html, the "board filled by spawn
+     alone" assertions). So this is a backstop, not a mechanic -- it earns
+     its keep only if TRAY_SETS, START_PIECES or spawn's key pool ever
+     changes, and the pigeonhole assertion is what would start failing first
+     if it did. */
   function relieve(state) {
     var oldest = -1;
     for (var i = 0; i < CELLS; i++) {
@@ -198,22 +300,28 @@
     return [{ type: 'dissolve', index: oldest, piece: gone }];
   }
 
-  function earFilled(state) {
-    return Math.min(EAR_SLOTS, Math.floor(state.score / (TARGET / EAR_SLOTS)));
+  /* Endless has no completion at all — it ends when the player presses стоп,
+     which is a UI action, not a rule. Demo ends when the three sets it opened
+     with are all retired. */
+  function isComplete(state) {
+    if (state.mode !== 'demo') return false;
+    return state.opening.every(function (k) { return state.done.indexOf(k) >= 0; });
   }
 
-  function isComplete(state) {
-    return !state.endless && state.score >= TARGET;
-  }
+  /* Test seam to sweep PIECES_PER_SET in tuning.html without touching the module
+     closure. Writing to the export object does not change the closure variable. */
+  function setPiecesPerSet(n) { PIECES_PER_SET = n; }
 
   root.Rules = {
-    GRID: GRID, CELLS: CELLS, MAX_TIER: MAX_TIER, COLLECTIONS: COLLECTIONS,
-    TARGET: TARGET, SCORING: SCORING, EAR_SLOTS: EAR_SLOTS,
+    GRID: GRID, CELLS: CELLS, TRAY_SETS: TRAY_SETS,
+    SCORING: SCORING, PIECES_PER_SET: PIECES_PER_SET,
     pointsFor: pointsFor,
     mulberry32: mulberry32,
     createState: createState, emptyCells: emptyCells,
-    spawn: spawn, canMerge: canMerge, classify: classify, apply: apply, isCell: isCell,
-    hasLegalMove: hasLegalMove, relieve: relieve,
-    earFilled: earFilled, isComplete: isComplete
+    spawn: spawn, setsWantingPartner: setsWantingPartner,
+    canMerge: canMerge, classify: classify, apply: apply, isCell: isCell,
+    hasLegalMove: hasLegalMove, relieve: relieve, retire: retire,
+    isComplete: isComplete,
+    _setPiecesPerSet: setPiecesPerSet
   };
 })(typeof window !== 'undefined' ? window : globalThis);
