@@ -20,6 +20,14 @@
     return p.collection.name[lang] + ' · ' + p.set.name[lang];
   }
 
+  /* Static, non-manifest copy (button labels, toasts, the manual) lives in
+     data/copy.js. Runtime-built strings read through this instead of
+     hard-coding a language. */
+  function copyOf(key) {
+    var dict = Copy[lang] || Copy.ru;
+    return dict[key] !== undefined ? dict[key] : key;
+  }
+
   function accentOf(key) {
     var p = pair(key);
     return p ? p.collection.accent : '#888';
@@ -233,7 +241,7 @@
       } else if (e.type === 'spawn') {
         Sfx.play('spawn');
       } else if (e.type === 'dissolve') {
-        toast('убрано в сейф');
+        toast(copyOf('toast.safe'));
       } else if (e.type === 'setComplete') {
         pendingPlate = e.key;
       }
@@ -585,6 +593,31 @@
     btn.classList.toggle('is-off', off);
   }
 
+  /* Every [data-i18n] node gets its text from data/copy.js. Screens built at
+     runtime (the collections list, the plates, the board) read Copy[lang]
+     themselves through labelOf/copyOf, since they do not exist in the DOM
+     for this loop to find until the moment they are shown. */
+  function applyCopy(which) {
+    lang = which;
+    document.documentElement.lang = which;
+    var dict = Copy[which] || Copy.ru;
+    var nodes = document.querySelectorAll('[data-i18n]');
+    for (var i = 0; i < nodes.length; i++) {
+      var key = nodes[i].dataset.i18n;
+      if (dict[key] !== undefined) nodes[i].textContent = dict[key];
+    }
+    var ariaNodes = document.querySelectorAll('[data-i18n-aria]');
+    for (var a = 0; a < ariaNodes.length; a++) {
+      var ariaKey = ariaNodes[a].dataset.i18nAria;
+      if (dict[ariaKey] !== undefined) ariaNodes[a].setAttribute('aria-label', dict[ariaKey]);
+    }
+    var altNodes = document.querySelectorAll('[data-i18n-alt]');
+    for (var b = 0; b < altNodes.length; b++) {
+      var altKey = altNodes[b].dataset.i18nAlt;
+      if (dict[altKey] !== undefined) altNodes[b].setAttribute('alt', dict[altKey]);
+    }
+  }
+
   document.addEventListener('click', function (ev) {
     var btn = ev.target.closest('[data-act]');
     if (!btn) return;
@@ -637,6 +670,7 @@
   });
 
   syncMuteGlyph();
+  applyCopy(lang);
 
   /* Deep links, so any screen can be previewed without playing to it:
      #manual, #endless, #demo/*, #collections, #board, #contacts */
