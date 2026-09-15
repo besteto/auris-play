@@ -251,13 +251,20 @@
     drawHud();
     if (scored) bumpScore();
 
+    /* Demo ends the instant the last set retires: no plate for that set, no
+       three-second wait -- straight to the collection page. */
+    if (R.isComplete(state)) {
+      pendingPlate = null;
+      hideSetPlate();
+      showCollectionPlate(featured);
+      return;
+    }
+
     if (pendingPlate) {
       var key = pendingPlate;
       pendingPlate = null;
       showSetPlate(key);
     }
-
-    if (R.isComplete(state)) return;
 
     /* The tray must never dead-end in front of a client in the chair. Endless
        has no end state to fall through to, so this is not a courtesy any more --
@@ -490,14 +497,6 @@
     box.style.setProperty('--accent', p.collection.accent);
     clearTimeout(plateTimer);
     plateTimer = setTimeout(hideSetPlate, PLATE_MS);
-
-    if (R.isComplete(state)) {
-      clearTimeout(plateTimer);
-      plateTimer = setTimeout(function () {
-        hideSetPlate();
-        showCollectionPlate(featured);
-      }, PLATE_MS);
-    }
   }
 
   function hideSetPlate() {
