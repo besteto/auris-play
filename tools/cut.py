@@ -144,6 +144,8 @@ def build_plates():
     """
     dest = os.path.join(OUT, "plates")
     os.makedirs(dest, exist_ok=True)
+    overlap = set(PLATES) & set(HEROES)
+    assert not overlap, "PLATES and HEROES share keys, one would silently overwrite the other: %s" % sorted(overlap)
     for name, (src, cx, cy, width) in list(PLATES.items()) + list(HEROES.items()):
         im = crop_portrait(src, cx, cy, width)
         im.save(os.path.join(dest, name + ".jpg"), quality=88)
