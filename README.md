@@ -1,4 +1,4 @@
-# AURIS · Saint Scalpelburg · Birthday Edition
+# AURIS · Saint Scalpelburg · Studio Edition
 
 <!-- The two workflow badges use relative paths, so they work whatever the repo
      is eventually called and whoever owns it. The PLAY badge cannot: fill in the
@@ -6,11 +6,7 @@
 
 [![tests](../../actions/workflows/tests.yml/badge.svg)](../../actions/workflows/tests.yml)
 [![pages](../../actions/workflows/pages/pages-build-deployment/badge.svg)](../../deployments/github-pages)
-[![play](https://img.shields.io/badge/%E2%96%B6_play-c9a45c?style=flat-square&labelColor=14100e)](https://besteto.github.io/ref-35/)
-
-
-A birthday present for Vlad Bodmodov, made out of Auris's own jewellery
-photography.
+[![play](https://img.shields.io/badge/%E2%96%B6_play-c9a45c?style=flat-square&labelColor=14100e)](https://besteto.github.io/auris-play/)
 
 Merge pieces until you reach thirty-five — one point for each year — and the game
 resolves into a catalogue page for a collection named after him.
