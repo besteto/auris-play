@@ -90,9 +90,10 @@ README на GitHub ещё подарочный: «Birthday Edition», бейдж
 
 ## Состояние репозитория
 
-- Ветка `kiosk`, HEAD `c63e342`, 37 коммитов от `b670f9d`. `main` держит `31ed946`.
-- Remote не задан. Три последних коммита несут трейлер без пустой строки перед ним,
-  коммит захода 10 подписан «Sonnet 5» — косметика истории, не переписывалась.
+- Ветка `kiosk`, 22 коммита над `main` (5). История переписана 2026-09-15 под формат
+  `CONTRIBUTING.md`, фиксапы засквошены; старая история — теги `backup/*-2026-09-15`,
+  удалить после пуша. Remote не задан.
+- `CONTRIBUTING.md` — для людей, `AGENTS.md` — для агентов; оба читать до правок.
 - Харнесс: `tests.html` 152/152, `smoke.html` 5/5, `tuning.html` 6/6.
 - `bash tools/pagecheck.sh '#endless' '#demo/cassiopea' '#collections' '#board' '#contacts'`.
 - Прогон всего: `bash tools/harness.sh tests smoke tuning`.
